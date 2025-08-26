@@ -1,0 +1,3 @@
+[submodule "external/hifi_ifdl"]
+	path = external/hifi_ifdl
+	url = https://github.com/CHELSEA234/HiFi_IFDL.git
