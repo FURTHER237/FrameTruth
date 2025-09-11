@@ -54,8 +54,12 @@ def test_enhanced_masks(image_path):
         localization = results['localization']
         
         print(f"Detection Result:")
-        print(f"  Status: {'🔴 FORGED' if detection['is_forged'] else '🟢 REAL'}")
-        print(f"  Confidence: {detection['probability']:.1%}")
+        if detection['result'] is not None:
+            print(f"  Status: {'🔴 FORGED' if detection['is_forged'] else '🟢 REAL'}")
+            print(f"  Confidence: {detection['probability']:.1%}")
+        else:
+            print(f"  Status: ❌ DETECTION FAILED")
+            print(f"  Confidence: N/A")
         
         if localization['mask'] is not None:
             mask = localization['mask']
