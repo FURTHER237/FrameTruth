@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Script to check the original image dimensions
 """
