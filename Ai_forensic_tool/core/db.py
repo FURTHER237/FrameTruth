@@ -78,6 +78,14 @@ CREATE TABLE IF NOT EXISTS access_log (
     FOREIGN KEY(actor_user_id) REFERENCES users(id),
     FOREIGN KEY(file_id) REFERENCES files(id)
 );
+CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    expires_at REAL NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_files_owner ON files(owner_id);
