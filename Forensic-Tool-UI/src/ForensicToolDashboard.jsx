@@ -13,6 +13,8 @@ import {
  * - All data is mocked locally; wire up real APIs as needed
  */
 
+
+
 // ---------- Small UI Primitives ---------- Cars Colour
 const Card = ({ className = "", children }) => (
   <div className={`rounded-2xl bg-pink-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
@@ -125,10 +127,22 @@ const VideoPlayerMock = ({ playing }) => {
 
 // ---------- Main App ----------
 export default function ForensicToolDashboard() {
+  const [user, setUser] = useState(() => localStorage.getItem("username") || null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(42);
   const [score, setScore] = useState(87);
 
+
+
+
+
+  const getAuthHeaders = () => {
+  const token = localStorage.getItem("access_token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+};
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => setProgress(p => (p >= 100 ? 0 : p + 1)), 120);
@@ -254,45 +268,71 @@ export default function ForensicToolDashboard() {
 
         {/* Right rail */}
         <aside className="space-y-6">
+          
+          <Card>
+            <SectionTitle>User</SectionTitle>
+            <div className="p-5 text-center text-zinc-900 text-lg font-semibold">
+              {user ? `Logged in as: ${user}` : "Not logged in"}
+            </div>
+          </Card>
+<Card className="flex flex-col justify-center items-center h-40">
+  <SectionTitle>{user ? "Welcome" : "Login"}</SectionTitle>
+  <div className="flex justify-center items-center flex-1 w-full">
+    {user ? (
+      <button
+        className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold"
+        onClick={() => {
+          // Clear token and user info
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("username");
+          setUser(null);
+          alert("Logged out successfully.");
+        }}
+      >
+        Logout
+      </button>
+    ) : (
+      <button
+        className="px-6 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"
+        onClick={async () => {
+          const username = prompt("Enter Username:");
+          if (!username) return;
+
+          const password = prompt("Enter Password:");
+          if (!password) return;
+
+          try {
+            const response = await fetch("http://127.0.0.1:8000/login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              alert(`Login successful! Welcome, ${data.username}`);
+              localStorage.setItem("access_token", data.access_token);
+              localStorage.setItem("username", data.username);
+              setUser(data.username);
+            } else {
+              const errorData = await response.json();
+              alert("Login failed: " + errorData.detail);
+            }
+          } catch (error) {
+            alert("Network error: " + error.message);
+          }
+        }}
+      >
+        Login
+      </button>
+    )}
+  </div>
+</Card>
+
          
-      <Card className="flex flex-col justify-center items-center h-40">
-      <SectionTitle>Login</SectionTitle>
-        <div className="flex justify-center items-center flex-1 w-full">
-          <button 
-            className="px-6 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"
-  onClick={async () => {
-    const username = prompt("Enter Username:");
-    if (!username) return;
-
-    const password = prompt("Enter Password:");
-    if (!password) return;
-
-    try {
-      const response = await fetch("http://127.0.0.1:8000/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ username, password }),
-        //credentials: "include"
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        alert(data.message);  // e.g. "Login successful!"
-      } else {
-        const errorData = await response.json();
-        alert("Login failed: " + errorData.detail);
-      }
-    } catch (error) {
-      alert("Network error: " + error.message);
-    }
-  }}
->
-            Login
-          </button>
-        </div>
-    </Card>
+     
           <Card>
             <SectionTitle>Metadata & Provenance</SectionTitle>
             <div className="p-5 space-y-4">
