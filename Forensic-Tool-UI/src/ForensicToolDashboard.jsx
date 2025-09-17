@@ -17,7 +17,7 @@ import {
 
 // ---------- Small UI Primitives ---------- Cars Colour
 const Card = ({ className = "", children }) => (
-  <div className={`rounded-2xl bg-pink-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
+  <div className={`rounded-2xl bg-blue-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
 );
 //bg-zinc-900/60 Actual card colour
 const SectionTitle = ({ children, right }) => (
