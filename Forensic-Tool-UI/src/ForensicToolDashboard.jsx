@@ -5,6 +5,7 @@ import {
   ChevronRight, ChevronLeft, Smartphone, ShieldCheck, Eye, EyeOff,
 } from "lucide-react";
 
+
 /**
  * Forensic Tool – React single-file demo UI
  * ---------------------------------------------------------
@@ -129,6 +130,9 @@ export default function ForensicToolDashboard() {
   const [progress, setProgress] = useState(42);
   const [score, setScore] = useState(87);
 
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => setProgress(p => (p >= 100 ? 0 : p + 1)), 120);
@@ -145,36 +149,76 @@ export default function ForensicToolDashboard() {
   return (
     <div className="min-h-screen w-full bg-black text-zinc-100">
       <div className="max-w-[1600px] mx-auto grid grid-cols-[260px_1fr_380px] gap-6 p-6">
-        {/* Sidebar */}
-        <aside className="sticky top-6 h-[calc(100vh-3rem)]">
-          <Card className="h-full flex flex-col">
-            <div className="px-5 pt-4 pb-3">
-              <div className="text-lg font-semibold tracking-tight">Cases</div>
-              <div className="mt-3 relative">
-                <input placeholder="Search" className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-sky-600" />
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+        
+        {/* Left column = new box + sidebar */}
+        <div className="flex flex-col gap-6 sticky top-6 self-start h-fit">
+          {/* New Top-Left Box */}
+          <Card className="h-[230px] flex flex-col px-5 pt-4 pb-3">
+            <div className="text-lg font-semibold tracking-tight">Upload an Image</div>
+            <div className="mt-3 text-sm text-zinc-400">
+              Choose an image to analyze.
+            </div>
+
+            {/* File input */}
+            <div className="mt-4">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setSelectedFile(file);                 // store file for later use
+                  setPreview(URL.createObjectURL(file)); // generate preview URL
+                }}
+                className="block w-full text-sm text-zinc-400
+                          file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0
+                          file:text-sm file:font-semibold
+                          file:bg-sky-600 file:text-white
+                          hover:file:bg-sky-500"
+              />
+            </div>
+            {preview && (
+              <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-center">
+                <img src={preview} alt="Preview" className="max-h-full object-contain" />
               </div>
-            </div>
-
-            <div className="px-3 space-y-1.5 overflow-y-auto">
-              <SidebarItem icon={ImageIcon} label="Image" badge={<Badge tone="amber">SUSPECT</Badge>} active />
-              <SidebarItem icon={User} label="Suspect" badge={<Badge tone="slate">SUSPECT</Badge>} />
-              <SidebarItem icon={CheckCircle2} label="Verified" badge={<Badge tone="green">VERIFIED</Badge>} />
-              <SidebarItem icon={Mic2} label="Audio" badge={<Badge tone="green">VERIFIED</Badge>} />
-            </div>
-
-            <div className="mt-auto px-5 py-4 border-t border-zinc-800/80">
-              <div className="text-sm text-zinc-400 mb-2">Ingest</div>
-              <ProgressBar label="Engines" value={90} />
-              <div className="h-2" />
-              <ProgressBar label="Frames" value={72} />
-              <div className="h-2" />
-              <ProgressBar label="Features" value={54} />
-              <div className="h-2" />
-              <ProgressBar label="Classify" value={31} />
-            </div>
+            )}
           </Card>
-        </aside>
+
+          {/* Sidebar */}
+          <div className="sticky top-[100px] h-[calc(100vh-100px)]">
+            <Card className="h-full flex flex-col">
+              <div className="px-5 pt-4 pb-3">
+                <div className="text-lg font-semibold tracking-tight">Cases</div>
+                <div className="mt-3 relative">
+                  <input
+                    placeholder="Search"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-sky-600"
+                  />
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+                </div>
+              </div>
+
+              <div className="px-3 space-y-1.5 overflow-y-auto">
+                <SidebarItem icon={ImageIcon} label="Image" badge={<Badge tone="amber">SUSPECT</Badge>} active />
+                <SidebarItem icon={User} label="Suspect" badge={<Badge tone="slate">SUSPECT</Badge>} />
+                <SidebarItem icon={CheckCircle2} label="Verified" badge={<Badge tone="green">VERIFIED</Badge>} />
+                <SidebarItem icon={Mic2} label="Audio" badge={<Badge tone="green">VERIFIED</Badge>} />
+              </div>
+
+              <div className="mt-auto px-5 py-4 border-t border-zinc-800/80">
+                <div className="text-sm text-zinc-400 mb-2">Ingest</div>
+                <ProgressBar label="Engines" value={90} />
+                <div className="h-2" />
+                <ProgressBar label="Frames" value={72} />
+                <div className="h-2" />
+                <ProgressBar label="Features" value={54} />
+                <div className="h-2" />
+                <ProgressBar label="Classify" value={31} />
+              </div>
+            </Card>
+          </div>
+        </div>
 
         {/* Main content */}
         <main className="space-y-6">
