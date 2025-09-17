@@ -132,6 +132,18 @@ export default function ForensicToolDashboard() {
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
+  const [result, setResult] = useState(null);
+
+  const handleUpload = () => {
+    if (!selectedFile) {
+      setResult({ error: "No file selected" });
+      return;
+    }
+
+    // Fake placeholder result
+    setResult({ message: "File ready to be analyzed", filename: selectedFile.name });
+  };
+
 
   useEffect(() => {
     if (!playing) return;
@@ -153,7 +165,7 @@ export default function ForensicToolDashboard() {
         {/* Left column = new box + sidebar */}
         <div className="flex flex-col gap-6 sticky top-6 self-start h-fit">
           {/* New Top-Left Box */}
-          <Card className="h-[230px] flex flex-col px-5 pt-4 pb-3">
+          <Card className="h-[500px] flex flex-col px-5 pt-4 pb-3">
             <div className="text-lg font-semibold tracking-tight">Upload an Image</div>
             <div className="mt-3 text-sm text-zinc-400">
               Choose an image to analyze.
@@ -183,7 +195,24 @@ export default function ForensicToolDashboard() {
                 <img src={preview} alt="Preview" className="max-h-full object-contain" />
               </div>
             )}
+            {/* Fake result */}
+            {result && (
+              <pre className="mt-3 text-xs bg-zinc-900 p-2 rounded overflow-auto">
+                {JSON.stringify(result, null, 2)}
+              </pre>
+            )}
+            {/* Upload button */}
+            <button
+              onClick={handleUpload}
+              className="mt-3 px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-500"
+            >
+              Upload & Analyze
+            </button>
+
+            
+            
           </Card>
+          
 
           {/* Sidebar */}
           <div className="sticky top-[100px] h-[calc(100vh-100px)]">
