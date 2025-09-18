@@ -7,7 +7,7 @@ import time
 import hashlib
 import secrets
 from typing import Optional, Dict, List
-from .db import get_connection
+from core.db import get_connection
 
 
 class UserManager:
@@ -119,12 +119,27 @@ class UserManager:
             Session token
         """
         token = secrets.token_urlsafe(32)
+        created_at = time.time()
+        expires_at = created_at + (24 * 60 * 60)  # 24 hours
+
         self.session_tokens[token] = {
             "user_id": user_id,
-            "created_at": time.time(),
-            "expires_at": time.time() + (24 * 60 * 60)  # 24 hours
+            "created_at": created_at,
+            "expires_at": expires_at  # 24 hours
         }
-        return token
+        try:
+            with get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("""
+                    INSERT INTO sessions (token, user_id, created_at, expires_at)
+                    VALUES (?, ?, ?, ?)
+                """, (token, user_id, created_at, expires_at))
+                conn.commit()
+            return token
+        except Exception as e:
+            print(f"Error creating session: {e}")
+            return ""
+
     
     def validate_session(self, token: str) -> Optional[Dict]:
         """

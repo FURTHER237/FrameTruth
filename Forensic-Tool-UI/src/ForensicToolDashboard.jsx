@@ -14,14 +14,16 @@ import {
  * - All data is mocked locally; wire up real APIs as needed
  */
 
-// ---------- Small UI Primitives ----------
-const Card = ({ className = "", children }) => (
-  <div className={`rounded-2xl bg-zinc-900/60 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
-);
 
+
+// ---------- Small UI Primitives ---------- Cars Colour
+const Card = ({ className = "", children }) => (
+  <div className={`rounded-2xl bg-blue-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
+);
+//bg-zinc-900/60 Actual card colour
 const SectionTitle = ({ children, right }) => (
   <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80">
-    <h3 className="text-zinc-200 font-medium tracking-wide uppercase text-xs">{children}</h3>
+    <h3 className="text-zinc-900 font-medium tracking-wide uppercase text-xs">{children}</h3>
     {right}
   </div>
 );
@@ -94,8 +96,8 @@ const Sparkline = ({ data = [], height = 64, stroke = 2, className = "" }) => {
 
   return (
     <svg className={`w-full ${className}`} width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <polyline fill="none" stroke="#27272a" strokeWidth={stroke} points={`0,${height-1} ${width},${height-1}`} />
-      <polyline fill="none" stroke="#38bdf8" strokeWidth={stroke} points={points} />
+      <polyline fill="none" stroke="#0f0e0eff" strokeWidth={stroke} points={`0,${height-1} ${width},${height-1}`} />
+      <polyline fill="none" stroke="#b5f25aff" strokeWidth={stroke} points={points} />
     </svg>
   );
 };
@@ -126,6 +128,7 @@ const VideoPlayerMock = ({ playing }) => {
 
 // ---------- Main App ----------
 export default function ForensicToolDashboard() {
+  const [user, setUser] = useState(() => localStorage.getItem("username") || null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(42);
   const [score, setScore] = useState(87);
@@ -145,6 +148,17 @@ export default function ForensicToolDashboard() {
   };
 
 
+
+
+
+
+  const getAuthHeaders = () => {
+  const token = localStorage.getItem("access_token");
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  };
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => setProgress(p => (p >= 100 ? 0 : p + 1)), 120);
@@ -291,7 +305,7 @@ export default function ForensicToolDashboard() {
             </div>
 
             <VideoPlayerMock playing={playing} />
-
+            
             {/* Confidence strip */}
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
@@ -304,7 +318,8 @@ export default function ForensicToolDashboard() {
                 </div>
               </Card>
               <Card>
-                <SectionTitle right={<Badge tone="blue">FC</Badge>}>Confluence</SectionTitle>
+                
+                <SectionTitle right={<Badge tone="red">FC</Badge>}>Confluence</SectionTitle>
                 <div className="px-3 pb-3">
                   <Sparkline data={confluence} className="pt-2" />
                 </div>
@@ -326,20 +341,71 @@ export default function ForensicToolDashboard() {
 
         {/* Right rail */}
         <aside className="space-y-6">
+          
           <Card>
-            <SectionTitle right={<div className="text-sky-400 text-xs flex items-center gap-1">SCORE <ChevronRight className="h-3 w-3"/></div>}>Findings</SectionTitle>
-            <div className="p-5">
-              <div className="flex items-center gap-6">
-                <DonutGauge value={score} />
-                <div className="space-y-4">
-                  <Row icon={AlertTriangle} iconClass="text-amber-300" title="FFT anomaly in T‑zone" />
-                  <Row icon={Eye} iconClass="text-amber-300" title="Eye blink inconsistencies" />
-                  <Row icon={AlertTriangle} iconClass="text-amber-300" title="Incoherent head pose" />
-                </div>
-              </div>
+            <SectionTitle>User</SectionTitle>
+            <div className="p-5 text-center text-zinc-900 text-lg font-semibold">
+              {user ? `Logged in as: ${user}` : "Not logged in"}
             </div>
           </Card>
+<Card className="flex flex-col justify-center items-center h-40">
+  <SectionTitle>{user ? "Welcome" : "Login"}</SectionTitle>
+  <div className="flex justify-center items-center flex-1 w-full">
+    {user ? (
+      <button
+        className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold"
+        onClick={() => {
+          // Clear token and user info
+          localStorage.removeItem("access_token");
+          localStorage.removeItem("username");
+          setUser(null);
+          alert("Logged out successfully.");
+        }}
+      >
+        Logout
+      </button>
+    ) : (
+      <button
+        className="px-6 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"
+        onClick={async () => {
+          const username = prompt("Enter Username:");
+          if (!username) return;
 
+          const password = prompt("Enter Password:");
+          if (!password) return;
+
+          try {
+            const response = await fetch("http://127.0.0.1:8000/login", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ username, password }),
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              alert(`Login successful! Welcome, ${data.username}`);
+              localStorage.setItem("access_token", data.access_token);
+              localStorage.setItem("username", data.username);
+              setUser(data.username);
+            } else {
+              const errorData = await response.json();
+              alert("Login failed: " + errorData.detail);
+            }
+          } catch (error) {
+            alert("Network error: " + error.message);
+          }
+        }}
+      >
+        Login
+      </button>
+    )}
+  </div>
+</Card>
+
+         
+     
           <Card>
             <SectionTitle>Metadata & Provenance</SectionTitle>
             <div className="p-5 space-y-4">
@@ -356,6 +422,7 @@ export default function ForensicToolDashboard() {
               </div>
             </div>
           </Card>
+           
 
           <Card>
             <SectionTitle>Mobile Check</SectionTitle>
@@ -372,6 +439,32 @@ export default function ForensicToolDashboard() {
               </div>
             </div>
           </Card>
+
+
+
+
+          <Card>
+            <SectionTitle right={<div className="text-sky-400 text-xs flex items-center gap-1">SCORE <ChevronRight className="h-3 w-3"/></div>}>Findings</SectionTitle>
+            <div className="p-5">
+              <div className="flex items-center gap-6">
+                <DonutGauge value={score} />
+                <div className="space-y-4">
+                  <Row icon={AlertTriangle} iconClass="text-amber-300" title="FFT anomaly in T‑zone" />
+                  <Row icon={Eye} iconClass="text-amber-300" title="Eye blink inconsistencies" />
+                  <Row icon={AlertTriangle} iconClass="text-amber-300" title="Incoherent head pose" />
+                </div>
+              </div>
+            </div>
+          </Card>
+          
+      
+
+
+
+
+
+
+
         </aside>
       </div>
     </div>
