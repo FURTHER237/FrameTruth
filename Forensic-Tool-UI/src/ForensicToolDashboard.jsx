@@ -280,7 +280,7 @@ export default function ForensicToolDashboard() {
   <div className="flex justify-center items-center flex-1 w-full">
     {user ? (
       <button
-        className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold"
+        className="px-6 py-2 rounded-lg bg-blue-900 hover:bg-red-500 text-white font-semibold"
         onClick={() => {
           // Clear token and user info
           localStorage.removeItem("access_token");
