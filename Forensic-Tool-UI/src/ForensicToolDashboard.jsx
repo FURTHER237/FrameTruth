@@ -19,11 +19,11 @@ import {
 
 // ---------- Small UI Primitives ---------- Cars Colour
 const Card = ({ className = "", children }) => (
-  <div className={`rounded-2xl bg-black-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
+  <div className={`rounded-2xl bg-black-200 border border-sky-500 shadow-xl ${className}`}>{children}</div>
 );
 //bg-zinc-900/60 Actual card colour
 const SectionTitle = ({ children, right }) => (
-  <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80">
+  <div className="flex items-center justify-between px-5 py-3 border-b border-sky-500/50">
     <h3 className="text-white font-medium tracking-wide uppercase text-xs">{children}</h3>
     {right}
   </div>
@@ -303,7 +303,7 @@ export default function ForensicToolDashboard() {
         {/* Left column = new box + sidebar */}
         <div className="flex flex-col gap-6 sticky top-6 self-start h-fit">
           {/* New Top-Left Box */}
-          <Card className="h-[500px] flex flex-col px-5 pt-4 pb-3">
+          <Card className="h-[180px] flex flex-col px-5 pt-4 pb-3">
             <div className="text-lg font-semibold tracking-tight">Upload an Image</div>
             <div className="mt-3 text-sm text-zinc-400">
               Choose an image to analyze.
@@ -364,7 +364,20 @@ export default function ForensicToolDashboard() {
 
 
             </div>
-            {batchLoading && <div className="mt-3 text-sky-400 text-sm">Analyzing images…</div>}
+            {batchLoading && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-sky-400">
+                <span>Analyzing images</span>
+                <div className="flex space-x-1">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                    <span
+                      key={i}
+                      className="inline-block w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse"
+                      style={{ animationDelay: `${i * 0.2}s` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {preview && (
               <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-center">
@@ -377,14 +390,14 @@ export default function ForensicToolDashboard() {
                 {JSON.stringify(result, null, 2)}
               </pre>
             )} */}
-            {/* Upload button */}
+            {/* Upload button
             <button
               onClick={handleAnalyze}
               disabled={!selectedFile}
               className="mt-3 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm"
             >
               Analyze Image
-            </button>
+            </button> */}
 
 
 
