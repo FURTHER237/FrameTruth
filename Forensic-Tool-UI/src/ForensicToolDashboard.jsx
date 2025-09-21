@@ -4,6 +4,8 @@ import {
   User, CheckCircle2, Mic2, AlertTriangle, Gauge, Hash, Copy,
   ChevronRight, ChevronLeft, Smartphone, ShieldCheck, Eye, EyeOff,
 } from "lucide-react";
+import DefaultImage from "./FrameTruth Image.png";
+
 
 
 
@@ -267,7 +269,7 @@ export default function ForensicToolDashboard() {
   if (!authenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-zinc-900">
-        <div className="bg-zinc-950 p-8 rounded-2xl shadow-lg w-[320px]">
+        <div className="bg-zinc-950 p-8 rounded-2xl shadow-lg w-[320px] border border-sky-500">
           <h2 className="text-white text-xl font-semibold mb-6 text-center">Login</h2>
           <input
             type="text"
@@ -579,8 +581,14 @@ export default function ForensicToolDashboard() {
               </>
             ) : (
               <>
-                {/* ---- NO IMAGE ---- */}
-                <VideoPlayerMock playing={playing} />
+                {/* ---- DEFAULT IMAGE ---- */}
+                <div className="relative w-full h-[500px] rounded-2xl border border-sky-500 overflow-hidden">
+                  <img
+                    src={DefaultImage}
+                    alt="Default"
+                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain"
+                  />
+                </div>
               </>
             )}
 
