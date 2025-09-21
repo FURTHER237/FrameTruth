@@ -132,12 +132,15 @@ export default function ForensicToolDashboard() {
   const [user, setUser] = useState(() => localStorage.getItem("username") || null);
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(42);
-  const [score, setScore] = useState(87);
+  const [score, setScore] = useState(0);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
   const [meta, setMeta] = useState(null);
+  const [maskImage, setMaskImage] = useState(null);
+  const [maskOpacity, setMaskOpacity] = useState(0.5); // default 50%
+
 
 
   const handleAnalyze = async () => {
@@ -151,18 +154,24 @@ export default function ForensicToolDashboard() {
         method: "POST",
         body: formData,
       });
+
       const data = await res.json();
 
-      // Update processed image
-      setProcessedImage(`data:image/png;base64,${data.image}`);
+      // ✅ Store the entire backend result
+      setResult(data);
 
-      // Update metadata safely
-      setMeta(data.meta || null);
+      // Optional: set mask or processed image if they exist
+      if (data.mask) setMaskImage(`data:image/png;base64,${data.mask}`);
+      if (data.image) setProcessedImage(`data:image/png;base64,${data.image}`);
 
+      // Remove the separate score state entirely
+      // setScore(data.confidence * 100);  <--- remove this
     } catch (err) {
       console.error("Error analyzing image:", err);
     }
   };
+
+
 
   const handleMetadata = async () => {
     if (!selectedFile) return;
@@ -209,6 +218,8 @@ export default function ForensicToolDashboard() {
     try { await navigator.clipboard.writeText(txt); alert("Copied to clipboard"); } catch {}
   };
 
+  const confidencePercent = result?.confidence != null ? result.confidence * 100 : 0;
+
   return (
     <div className="min-h-screen w-full bg-black text-zinc-100">
       <div className="max-w-[1600px] mx-auto grid grid-cols-[260px_1fr_380px] gap-6 p-6">
@@ -246,12 +257,12 @@ export default function ForensicToolDashboard() {
                 <img src={preview} alt="Preview" className="max-h-full object-contain" />
               </div>
             )}
-            {/* Fake result */}
+            {/* Fake result
             {result && (
               <pre className="mt-3 text-xs bg-zinc-900 p-2 rounded overflow-auto">
                 {JSON.stringify(result, null, 2)}
               </pre>
-            )}
+            )} */}
             {/* Upload button */}
             <button
               onClick={handleAnalyze}
@@ -344,36 +355,67 @@ export default function ForensicToolDashboard() {
               </div>
             </div>
 
-            {processedImage ? (
-              <img
-                src={processedImage}
-                alt="Analyzed"
-                className="max-h-[500px] w-full object-contain rounded-lg border border-zinc-800"
-              />
+            {preview ? (
+              <div className="relative w-full h-[500px] rounded-lg border border-zinc-800 overflow-hidden">
+                {/* Original image */}
+                <img
+                  src={preview}
+                  alt="Original"
+                  className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain"
+                />
+
+                {/* Mask overlay */}
+                {maskImage && (
+                  <img
+                    src={maskImage}
+                    alt="Forgery Mask"
+                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain pointer-events-none"
+                    style={{ opacity: maskOpacity }}
+                  />
+                )}
+
+                {/* Optional opacity slider */}
+                {maskImage && (
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={maskOpacity}
+                    onChange={(e) => setMaskOpacity(parseFloat(e.target.value))}
+                    className="absolute bottom-2 left-1/2 -translate-x-1/2 w-3/4"
+                  />
+                )}
+              </div>
             ) : (
               <VideoPlayerMock playing={playing} />
             )}
 
+
+
             
-            {/* Confidence strip */}
-            <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card>
-                <SectionTitle right={<Badge tone="slate">BLINK</Badge>}>Confidence</SectionTitle>
-                <div className="px-3 pb-3">
-                  <Sparkline data={confidence} className="pt-2" />
-                  <div className="flex text-[10px] text-zinc-500 justify-between px-1">
-                    <span>CUT</span><span>SYNC</span><span>CUT</span><span>STRESS</span>
+            {/* Forgery Confidence Bar */}
+            <Card className="mt-4">
+              <SectionTitle
+                right={<Badge tone={confidencePercent >= 50 ? "red" : "green"}>
+                  {confidencePercent >= 50 ? "FAKE" : "REAL"}
+                </Badge>}
+                className="border-b-0"
+              >
+                Forgery Confidence
+              </SectionTitle>
+              <div className="px-3 pb-3 pt-2">
+                <div className="relative h-6 w-full bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${confidencePercent >= 50 ? "bg-red-600" : "bg-emerald-500"}`}
+                    style={{ width: `${confidencePercent}%` }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-zinc-100">
+                    {confidencePercent >= 50 ? `Fake ${confidencePercent.toFixed(1)}%` : `Real ${confidencePercent.toFixed(1)}%`}
                   </div>
                 </div>
-              </Card>
-              <Card>
-                
-                <SectionTitle right={<Badge tone="red">FC</Badge>}>Confluence</SectionTitle>
-                <div className="px-3 pb-3">
-                  <Sparkline data={confluence} className="pt-2" />
-                </div>
-              </Card>
-            </div>
+              </div>
+            </Card>
           </Card>
 
           {/* Bottom ingest (compact) */}
