@@ -317,17 +317,36 @@ export default function ForensicToolDashboard() {
                 onChange={async (e) => {
                   const files = e.target.files;
                   if (!files.length) return;
-                  const formData = new FormData();
-                  for (let f of files) formData.append("files", f);
 
                   setBatchLoading(true);
+
                   try {
-                    const res = await fetch("http://localhost:5000/batch_analyze", {
+                    // 1️⃣ Fetch metadata for original files
+                    const metaFormData = new FormData();
+                    for (let f of files) metaFormData.append("files", f);
+                    const metaRes = await fetch("http://localhost:5000/batch_metadata", {
                       method: "POST",
-                      body: formData,
+                      body: metaFormData,
                     });
-                    const data = await res.json();
-                    setBatchResults(data.results);
+                    const metaJson = await metaRes.json();
+
+                    // 2️⃣ Send files to batch_analyze
+                    const analyzeFormData = new FormData();
+                    for (let f of files) analyzeFormData.append("files", f);
+                    const analyzeRes = await fetch("http://localhost:5000/batch_analyze", {
+                      method: "POST",
+                      body: analyzeFormData,
+                    });
+                    const analyzeJson = await analyzeRes.json();
+
+                    // 3️⃣ Merge analysis results with metadata
+                    const mergedResults = analyzeJson.results.map((res, i) => ({
+                      ...res,
+                      meta: metaJson.results[i] || null,
+                    }));
+
+                    // 4️⃣ Update state
+                    setBatchResults(mergedResults);
                     setBatchIndex(0);
                   } catch (err) {
                     console.error("Batch analyze failed:", err);
@@ -342,6 +361,8 @@ export default function ForensicToolDashboard() {
                           file:bg-sky-600 file:text-white
                           hover:file:bg-sky-500"
               />
+
+
             </div>
             {batchLoading && <div className="mt-3 text-sky-400 text-sm">Analyzing images…</div>}
 
@@ -658,93 +679,92 @@ export default function ForensicToolDashboard() {
          
      
           <Card>
-            <SectionTitle right={
-              <button
-                onClick={handleMetadata}
-                className="text-xs text-sky-400 hover:underline"
-              >
-                Analyze
-              </button>
-            }>
-              Metadata & Provenance
-            </SectionTitle>
+            <SectionTitle>Metadata & Provenance</SectionTitle>
             <div className="p-5 text-xs text-zinc-300 space-y-4">
-              {meta ? (
+              {batchResults.length > 0 && batchResults[batchIndex]?.meta ? (
                 <>
                   <pre>
-          <div className="p-5 text-xs text-zinc-300 space-y-1">
-            <div className="mt-2 font-semibold text-sky-500">[File Information]</div>
-            <div>File: {selectedFile?.name}</div>
-            <div>Size: {meta.size_bytes.toLocaleString()} bytes</div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-zinc-300">SHA-256:</span>
-              <code
-                className="text-zinc-300 truncate max-w-[200px]"
-                title={meta.sha256} // shows full SHA on hover
-              >
-                {meta.sha256}
-              </code>
-              <button
-                onClick={() => navigator.clipboard.writeText(meta.sha256)}
-                className="ml-auto inline-flex items-center gap-1 text-xs text-sky-400 hover:underline"
-              >
-                <Copy className="h-3.5 w-3.5"/>Copy
-              </button>
-            </div>
+                    <div className="p-5 text-xs text-zinc-300 space-y-1">
 
-            <div className="mt-2 font-semibold text-sky-500">[File Timestamps]</div>
-            <div>Created: {meta.created}</div>
-            <div>Modified: {meta.modified}</div>
-            <div>Analysed: {meta.analysed}</div>
+                      {/* ----- File Information ----- */}
+                      <div className="mt-2 font-semibold text-sky-500">[File Information]</div>
+                      <div>File: {batchResults[batchIndex].filename}</div>
+                      <div>Size: {batchResults[batchIndex].meta.size_bytes.toLocaleString()} bytes</div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <span className="text-zinc-300">SHA-256:</span>
+                        <code
+                          className="text-zinc-300 truncate max-w-[200px]"
+                          title={batchResults[batchIndex].meta.sha256}
+                        >
+                          {batchResults[batchIndex].meta.sha256}
+                        </code>
+                        <button
+                          onClick={() => navigator.clipboard.writeText(batchResults[batchIndex].meta.sha256)}
+                          className="ml-auto inline-flex items-center gap-1 text-xs text-sky-400 hover:underline"
+                        >
+                          <Copy className="h-3.5 w-3.5"/>Copy
+                        </button>
+                      </div>
 
-            <div className="mt-2 font-semibold text-sky-500">[Camera Information]</div>
-            <div>Make: {meta.make || "N/A"}</div>
-            <div>Model: {meta.model || "N/A"}</div>
-            <div>Serial Number: {meta.serial || "N/A"}</div>
-            <div>Lens Model: {meta.lens || "N/A"}</div>
-            <div>Date Taken: {meta.date_taken || "N/A"}</div>
+                      {/* ----- File Timestamps ----- */}
+                      <div className="mt-2 font-semibold text-sky-500">[File Timestamps]</div>
+                      <div>Created: {batchResults[batchIndex].meta.created}</div>
+                      <div>Modified: {batchResults[batchIndex].meta.modified}</div>
+                      <div>Analysed: {batchResults[batchIndex].meta.analysed}</div>
 
-            <div className="mt-2 font-semibold text-sky-500">[Location Data]</div>
-            <div>Latitude: {meta.latitude != null ? meta.latitude.toFixed(6) : "N/A"}</div>
-            <div>Longitude: {meta.longitude != null ? meta.longitude.toFixed(6) : "N/A"}</div>
-            <div>Altitude: {meta.altitude != null ? meta.altitude.toFixed(2) + " m" : "N/A"}</div>
+                      {/* ----- Camera Information ----- */}
+                      <div className="mt-2 font-semibold text-sky-500">[Camera Information]</div>
+                      <div>Make: {batchResults[batchIndex].meta.make || "N/A"}</div>
+                      <div>Model: {batchResults[batchIndex].meta.model || "N/A"}</div>
+                      <div>Serial Number: {batchResults[batchIndex].meta.serial || "N/A"}</div>
+                      <div>Lens Model: {batchResults[batchIndex].meta.lens || "N/A"}</div>
+                      <div>Date Taken: {batchResults[batchIndex].meta.date_taken || "N/A"}</div>
 
-            <div className="mt-2 font-semibold text-sky-500">[Software / Editing]</div>
-            <div className="flex flex-col gap-1 text-xs">
-              {meta.software && (
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-300">Software:</span>
-                  <code
-                    className="text-zinc-300 truncate max-w-[200px]"
-                    title={meta.software}
-                  >
-                    {meta.software}
-                  </code>
-                </div>
-              )}
-              {meta.description && (
-                <div className="flex items-center gap-2">
-                  <span className="text-zinc-300">Description:</span>
-                  <code
-                    className="text-zinc-300 truncate max-w-[200px]"
-                    title={meta.description}
-                  >
-                    {meta.description}
-                  </code>
-                </div>
-              )}
-            </div>
-          </div>
+                      {/* ----- Location Data ----- */}
+                      <div className="mt-2 font-semibold text-sky-500">[Location Data]</div>
+                      <div>Latitude: {batchResults[batchIndex].meta.latitude != null ? batchResults[batchIndex].meta.latitude.toFixed(6) : "N/A"}</div>
+                      <div>Longitude: {batchResults[batchIndex].meta.longitude != null ? batchResults[batchIndex].meta.longitude.toFixed(6) : "N/A"}</div>
+                      <div>Altitude: {batchResults[batchIndex].meta.altitude != null ? batchResults[batchIndex].meta.altitude.toFixed(2) + " m" : "N/A"}</div>
 
+                      {/* ----- Software / Editing ----- */}
+                      <div className="mt-2 font-semibold text-sky-500">[Software / Editing]</div>
+                      <div className="flex flex-col gap-1 text-xs">
+                        {batchResults[batchIndex].meta.software && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-zinc-300">Software:</span>
+                            <code
+                              className="text-zinc-300 truncate max-w-[200px]"
+                              title={batchResults[batchIndex].meta.software}
+                            >
+                              {batchResults[batchIndex].meta.software}
+                            </code>
+                          </div>
+                        )}
+                        {batchResults[batchIndex].meta.description && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-zinc-300">Description:</span>
+                            <code
+                              className="text-zinc-300 truncate max-w-[200px]"
+                              title={batchResults[batchIndex].meta.description}
+                            >
+                              {batchResults[batchIndex].meta.description}
+                            </code>
+                          </div>
+                        )}
+                      </div>
+
+                    </div>
                   </pre>
                 </>
               ) : (
                 <div className="text-zinc-400">
-                  Upload an image and click **Analyze** to view metadata.
+                  Upload images to view metadata.
                 </div>
               )}
             </div>
           </Card>
+
+
 
 
            
