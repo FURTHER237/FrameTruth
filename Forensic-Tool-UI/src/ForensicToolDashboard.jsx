@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 
 
+
 /**
  * Forensic Tool – React single-file demo UI
  * ---------------------------------------------------------
@@ -136,18 +137,52 @@ export default function ForensicToolDashboard() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
+  const [meta, setMeta] = useState(null);
 
-  const handleUpload = () => {
-    if (!selectedFile) {
-      setResult({ error: "No file selected" });
-      return;
+
+  const handleAnalyze = async () => {
+    if (!selectedFile) return;
+
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch("http://localhost:5000/analyze", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      // Update processed image
+      setProcessedImage(`data:image/png;base64,${data.image}`);
+
+      // Update metadata safely
+      setMeta(data.meta || null);
+
+    } catch (err) {
+      console.error("Error analyzing image:", err);
     }
-
-    // Fake placeholder result
-    setResult({ message: "File ready to be analyzed", filename: selectedFile.name });
   };
 
+  const handleMetadata = async () => {
+    if (!selectedFile) return;
 
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
+    try {
+      const res = await fetch("http://localhost:5000/metadata", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+
+      setMeta(data);
+
+    } catch (err) {
+      console.error("Error fetching metadata:", err);
+    }
+  };
 
 
 
@@ -167,6 +202,8 @@ export default function ForensicToolDashboard() {
 
   const confidence = useMemo(() => Array.from({length: 90}, (_,i) => 50 + Math.sin(i/5)*18 + (Math.random()*8-4)), []);
   const confluence = useMemo(() => Array.from({length: 70}, (_,i) => 40 + Math.cos(i/6)*14 + (Math.random()*6-3)), []);
+  const [processedImage, setProcessedImage] = useState(null);
+
 
   const copy = async (txt) => {
     try { await navigator.clipboard.writeText(txt); alert("Copied to clipboard"); } catch {}
@@ -217,11 +254,14 @@ export default function ForensicToolDashboard() {
             )}
             {/* Upload button */}
             <button
-              onClick={handleUpload}
-              className="mt-3 px-4 py-2 bg-sky-600 text-white rounded-xl hover:bg-sky-500"
+              onClick={handleAnalyze}
+              disabled={!selectedFile}
+              className="mt-3 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-sm"
             >
-              Upload & Analyze
+              Analyze Image
             </button>
+
+
 
             
             
@@ -304,7 +344,16 @@ export default function ForensicToolDashboard() {
               </div>
             </div>
 
-            <VideoPlayerMock playing={playing} />
+            {processedImage ? (
+              <img
+                src={processedImage}
+                alt="Analyzed"
+                className="max-h-[500px] w-full object-contain rounded-lg border border-zinc-800"
+              />
+            ) : (
+              <VideoPlayerMock playing={playing} />
+            )}
+
             
             {/* Confidence strip */}
             <div className="mt-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -407,21 +456,58 @@ export default function ForensicToolDashboard() {
          
      
           <Card>
-            <SectionTitle>Metadata & Provenance</SectionTitle>
-            <div className="p-5 space-y-4">
-              <div>
-                <div className="text-xs text-zinc-500 mb-1">SHA‑256</div>
-                <div className="flex items-center gap-2">
-                  <Hash className="h-4 w-4 text-zinc-500"/>
-                  <code className="text-[11px] text-zinc-300">24SC07F66A98E…F2C9</code>
-                  <button onClick={()=>copy("24SC07F66A98E…F2C9")} className="ml-auto inline-flex items-center gap-1 text-xs text-sky-400 hover:underline"><Copy className="h-3.5 w-3.5"/>Copy</button>
+            <SectionTitle right={
+              <button
+                onClick={handleMetadata}
+                className="text-xs text-sky-400 hover:underline"
+              >
+                Analyze
+              </button>
+            }>
+              Metadata & Provenance
+            </SectionTitle>
+            <div className="p-5 text-xs text-zinc-300 space-y-4">
+              {meta ? (
+                <>
+                  <pre>
+          <div className="p-5 text-xs text-zinc-300 space-y-1">
+            <div>File: {selectedFile?.name}</div>
+            <div>Size: {meta.size_bytes.toLocaleString()} bytes</div>
+            <div>Hash (SHA256): {meta.sha256}</div>
+
+            <div className="mt-2 font-semibold">[File Timestamps]</div>
+            <div>Created: {meta.created}</div>
+            <div>Modified: {meta.modified}</div>
+            <div>Accessed: {meta.accessed}</div>
+
+            <div className="mt-2 font-semibold">[Camera Information]</div>
+            <div>Make: {meta.make || "N/A"}</div>
+            <div>Model: {meta.model || "N/A"}</div>
+            <div>Serial Number: {meta.serial_number || "N/A"}</div>
+            <div>Lens Model: {meta.lens || "N/A"}</div>
+            <div>Date Taken: {meta.date_taken || "N/A"}</div>
+
+            <div className="mt-2 font-semibold">[Location Data]</div>
+            <div>Latitude: {meta.latitude != null ? meta.latitude.toFixed(6) : "N/A"}</div>
+            <div>Longitude: {meta.longitude != null ? meta.longitude.toFixed(6) : "N/A"}</div>
+            <div>Altitude: {meta.altitude != null ? meta.altitude.toFixed(2) + " m" : "N/A"}</div>
+
+            <div className="mt-2 font-semibold">[Software / Editing]</div>
+            <div>Software: {meta.software || "N/A"}</div>
+            <div>Description: {meta.description || "N/A"}</div>
+          </div>
+
+                  </pre>
+                </>
+              ) : (
+                <div className="text-zinc-400">
+                  Upload an image and click **Analyze** to view metadata.
                 </div>
-              </div>
-              <div className="flex items-center gap-2 text-xs text-zinc-400">
-                <ShieldCheck className="h-4 w-4 text-emerald-400"/> Verified capture pipeline
-              </div>
+              )}
             </div>
           </Card>
+
+
            
 
           <Card>
