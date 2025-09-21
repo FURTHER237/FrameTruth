@@ -48,25 +48,42 @@ def safe_exif(tag):
 def analyze():
     file = request.files["file"]
 
-    # Save to a temporary path so HiFi can read it
+    # Save to a temporary file so HiFi can read it
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp_path = tmp.name
         file.save(tmp_path)
 
     try:
-        results = hifi_model.analyze_image(tmp_path, save_mask=False)
-        detection = results["detection"]
-        mask_array = results["localization"]["mask"]  # numpy array (0/1)
+        # Open the original image to know its size
+        img = Image.open(tmp_path).convert("RGB")
 
-        # Convert mask array to a PNG in memory
-        mask_img = Image.fromarray((mask_array * 255).astype(np.uint8))
+        # Run the HiFi model
+        results = hifi_model.analyze_image(tmp_path, save_mask=True)
+
+        detection = results["detection"]
+        mask_array = results["localization"]["mask"]
+
+        # ---- Normalize mask to 0-1 range ----
+        mask_min = mask_array.min()
+        mask_max = mask_array.max()
+        mask_norm = (mask_array - mask_min) / (mask_max - mask_min + 1e-8)
+
+        # Convert to PIL image and resize to match original
+        mask_img = Image.fromarray((mask_norm * 255).astype(np.uint8))
+        mask_img = mask_img.resize(img.size, resample=Image.BILINEAR)
+
+        # Encode mask to base64
         buffer = BytesIO()
         mask_img.save(buffer, format="PNG")
         buffer.seek(0)
         encoded_mask = base64.b64encode(buffer.read()).decode("utf-8")
 
-
+        # ---- Debug output ----
+        print(f"Detection output: {detection}")
+        print(f"Mask stats -> min: {mask_min} max: {mask_max} "
+              f"-> normalized min: {mask_norm.min()} max: {mask_norm.max()}")
         print("Sending mask base64 length:", len(encoded_mask))
+
         return jsonify({
             "mask": encoded_mask,
             "confidence": float(detection["probability"]),
@@ -74,6 +91,8 @@ def analyze():
         })
     finally:
         os.remove(tmp_path)
+
+
 
 
 @app.route("/metadata", methods=["POST"])
