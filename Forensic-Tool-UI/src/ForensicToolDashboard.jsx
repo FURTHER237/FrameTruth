@@ -130,6 +130,11 @@ const VideoPlayerMock = ({ playing }) => {
 // ---------- Main App ----------
 export default function ForensicToolDashboard() {
   const [user, setUser] = useState(() => localStorage.getItem("username") || null);
+  const [authenticated, setAuthenticated] = useState(!!user);
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  
   const [playing, setPlaying] = useState(false);
   const [progress, setProgress] = useState(42);
   const [score, setScore] = useState(0);
@@ -168,6 +173,30 @@ export default function ForensicToolDashboard() {
       // setScore(data.confidence * 100);  <--- remove this
     } catch (err) {
       console.error("Error analyzing image:", err);
+    }
+  };
+
+  const handleLogin = async () => {
+    setLoginError("");
+    try {
+      const response = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("username", data.username);
+        setUser(data.username);
+        setAuthenticated(true);
+      } else {
+        const errorData = await response.json();
+        setLoginError(errorData.detail || "Login failed");
+      }
+    } catch (err) {
+      setLoginError("Network error: " + err.message);
     }
   };
 
@@ -219,6 +248,38 @@ export default function ForensicToolDashboard() {
   };
 
   const confidencePercent = result?.confidence != null ? result.confidence * 100 : 0;
+
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-900">
+        <div className="bg-zinc-950 p-8 rounded-2xl shadow-lg w-[320px]">
+          <h2 className="text-white text-xl font-semibold mb-6 text-center">Login</h2>
+          <input
+            type="text"
+            placeholder="Username"
+            value={loginUsername}
+            onChange={(e) => setLoginUsername(e.target.value)}
+            className="w-full mb-4 px-4 py-2 rounded-lg bg-zinc-800 text-white border border-zinc-700"
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            className="w-full mb-4 px-4 py-2 rounded-lg bg-zinc-800 text-white border border-zinc-700"
+          />
+          {loginError && <div className="text-red-500 text-sm mb-2">{loginError}</div>}
+          <button
+            onClick={handleLogin}
+            className="w-full py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+
 
   return (
     <div className="min-h-screen w-full bg-black text-zinc-100">
@@ -435,65 +496,30 @@ export default function ForensicToolDashboard() {
           
           <Card>
             <SectionTitle className="text-white">User</SectionTitle>
-            <div className="p-5 text-center text-zinc-500 text-lg font-semibold">
-              {user ? `Logged in as: ${user}` : "Not logged in"}
+            <div className="p-5 text-center text-zinc-500 text-lg font-semibold space-y-4">
+              {user ? (
+                <>
+                  <div>Logged in as: {user}</div>
+                  <button
+                    className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold"
+                    onClick={() => {
+                      // Clear token and user info
+                      localStorage.removeItem("access_token");
+                      localStorage.removeItem("username");
+                      setUser(null);
+                      // Redirect to login page
+                      window.location.href = "/login"; 
+                    }}
+                  >
+                    Logout
+                  </button>
+                </>
+              ) : (
+                <div>Not logged in</div>
+              )}
             </div>
           </Card>
-<Card className="flex flex-col justify-center items-center h-40">
-  <SectionTitle>{user ? "Welcome" : "Login"}</SectionTitle>
-  <div className="flex justify-center items-center flex-1 w-full">
-    {user ? (
-      <button
-        className="px-6 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-semibold"
-        onClick={() => {
-          // Clear token and user info
-          localStorage.removeItem("access_token");
-          localStorage.removeItem("username");
-          setUser(null);
-          alert("Logged out successfully.");
-        }}
-      >
-        Logout
-      </button>
-    ) : (
-      <button
-        className="px-6 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-semibold"
-        onClick={async () => {
-          const username = prompt("Enter Username:");
-          if (!username) return;
 
-          const password = prompt("Enter Password:");
-          if (!password) return;
-
-          try {
-            const response = await fetch("http://127.0.0.1:8000/login", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({ username, password }),
-            });
-
-            if (response.ok) {
-              const data = await response.json();
-              alert(`Login successful! Welcome, ${data.username}`);
-              localStorage.setItem("access_token", data.access_token);
-              localStorage.setItem("username", data.username);
-              setUser(data.username);
-            } else {
-              const errorData = await response.json();
-              alert("Login failed: " + errorData.detail);
-            }
-          } catch (error) {
-            alert("Network error: " + error.message);
-          }
-        }}
-      >
-        Login
-      </button>
-    )}
-  </div>
-</Card>
 
          
      
