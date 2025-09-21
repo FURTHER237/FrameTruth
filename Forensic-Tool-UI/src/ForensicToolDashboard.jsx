@@ -19,12 +19,12 @@ import {
 
 // ---------- Small UI Primitives ---------- Cars Colour
 const Card = ({ className = "", children }) => (
-  <div className={`rounded-2xl bg-blue-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
+  <div className={`rounded-2xl bg-black-200 border border-zinc-800 shadow-xl ${className}`}>{children}</div>
 );
 //bg-zinc-900/60 Actual card colour
 const SectionTitle = ({ children, right }) => (
   <div className="flex items-center justify-between px-5 py-3 border-b border-zinc-800/80">
-    <h3 className="text-zinc-900 font-medium tracking-wide uppercase text-xs">{children}</h3>
+    <h3 className="text-white font-medium tracking-wide uppercase text-xs">{children}</h3>
     {right}
   </div>
 );
@@ -392,8 +392,8 @@ export default function ForensicToolDashboard() {
         <aside className="space-y-6">
           
           <Card>
-            <SectionTitle>User</SectionTitle>
-            <div className="p-5 text-center text-zinc-900 text-lg font-semibold">
+            <SectionTitle className="text-white">User</SectionTitle>
+            <div className="p-5 text-center text-zinc-500 text-lg font-semibold">
               {user ? `Logged in as: ${user}` : "Not logged in"}
             </div>
           </Card>
@@ -471,30 +471,67 @@ export default function ForensicToolDashboard() {
                 <>
                   <pre>
           <div className="p-5 text-xs text-zinc-300 space-y-1">
+            <div className="mt-2 font-semibold text-sky-500">[File Information]</div>
             <div>File: {selectedFile?.name}</div>
             <div>Size: {meta.size_bytes.toLocaleString()} bytes</div>
-            <div>Hash (SHA256): {meta.sha256}</div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-zinc-300">SHA-256:</span>
+              <code
+                className="text-zinc-300 truncate max-w-[200px]"
+                title={meta.sha256} // shows full SHA on hover
+              >
+                {meta.sha256}
+              </code>
+              <button
+                onClick={() => navigator.clipboard.writeText(meta.sha256)}
+                className="ml-auto inline-flex items-center gap-1 text-xs text-sky-400 hover:underline"
+              >
+                <Copy className="h-3.5 w-3.5"/>Copy
+              </button>
+            </div>
 
-            <div className="mt-2 font-semibold">[File Timestamps]</div>
+            <div className="mt-2 font-semibold text-sky-500">[File Timestamps]</div>
             <div>Created: {meta.created}</div>
             <div>Modified: {meta.modified}</div>
-            <div>Accessed: {meta.accessed}</div>
+            <div>Analysed: {meta.analysed}</div>
 
-            <div className="mt-2 font-semibold">[Camera Information]</div>
+            <div className="mt-2 font-semibold text-sky-500">[Camera Information]</div>
             <div>Make: {meta.make || "N/A"}</div>
             <div>Model: {meta.model || "N/A"}</div>
-            <div>Serial Number: {meta.serial_number || "N/A"}</div>
+            <div>Serial Number: {meta.serial || "N/A"}</div>
             <div>Lens Model: {meta.lens || "N/A"}</div>
             <div>Date Taken: {meta.date_taken || "N/A"}</div>
 
-            <div className="mt-2 font-semibold">[Location Data]</div>
+            <div className="mt-2 font-semibold text-sky-500">[Location Data]</div>
             <div>Latitude: {meta.latitude != null ? meta.latitude.toFixed(6) : "N/A"}</div>
             <div>Longitude: {meta.longitude != null ? meta.longitude.toFixed(6) : "N/A"}</div>
             <div>Altitude: {meta.altitude != null ? meta.altitude.toFixed(2) + " m" : "N/A"}</div>
 
-            <div className="mt-2 font-semibold">[Software / Editing]</div>
-            <div>Software: {meta.software || "N/A"}</div>
-            <div>Description: {meta.description || "N/A"}</div>
+            <div className="mt-2 font-semibold text-sky-500">[Software / Editing]</div>
+            <div className="flex flex-col gap-1 text-xs">
+              {meta.software && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-300">Software:</span>
+                  <code
+                    className="text-zinc-300 truncate max-w-[200px]"
+                    title={meta.software}
+                  >
+                    {meta.software}
+                  </code>
+                </div>
+              )}
+              {meta.description && (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-300">Description:</span>
+                  <code
+                    className="text-zinc-300 truncate max-w-[200px]"
+                    title={meta.description}
+                  >
+                    {meta.description}
+                  </code>
+                </div>
+              )}
+            </div>
           </div>
 
                   </pre>
