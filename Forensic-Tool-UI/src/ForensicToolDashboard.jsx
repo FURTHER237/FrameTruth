@@ -146,6 +146,11 @@ export default function ForensicToolDashboard() {
   const [maskImage, setMaskImage] = useState(null);
   const [maskOpacity, setMaskOpacity] = useState(0.5); // default 50%
 
+  const [batchResults, setBatchResults] = useState([]);
+  const [batchIndex, setBatchIndex] = useState(0);
+  const [batchLoading, setBatchLoading] = useState(false);
+
+
 
 
   const handleAnalyze = async () => {
@@ -161,6 +166,7 @@ export default function ForensicToolDashboard() {
       });
 
       const data = await res.json();
+      console.log("Batch results:", data.results);
 
       // ✅ Store the entire backend result
       setResult(data);
@@ -247,7 +253,16 @@ export default function ForensicToolDashboard() {
     try { await navigator.clipboard.writeText(txt); alert("Copied to clipboard"); } catch {}
   };
 
-  const confidencePercent = result?.confidence != null ? result.confidence * 100 : 0;
+ 
+  
+  const currentBatch = batchResults[batchIndex];
+  // Only set these if currentBatch exists
+  const currentMask = currentBatch?.mask ? `data:image/png;base64,${currentBatch.mask}` : null;
+  const currentConfidencePercent = currentBatch?.confidence != null ? currentBatch.confidence * 100 : 0;
+  const currentOriginal = currentBatch?.original ? `data:image/png;base64,${currentBatch.original}` : null;
+  const currentFilename = currentBatch?.filename || "";
+
+  
 
   if (!authenticated) {
     return (
@@ -294,16 +309,31 @@ export default function ForensicToolDashboard() {
               Choose an image to analyze.
             </div>
 
-            {/* File input */}
             <div className="mt-4">
               <input
                 type="file"
+                multiple
                 accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  setSelectedFile(file);                 // store file for later use
-                  setPreview(URL.createObjectURL(file)); // generate preview URL
+                onChange={async (e) => {
+                  const files = e.target.files;
+                  if (!files.length) return;
+                  const formData = new FormData();
+                  for (let f of files) formData.append("files", f);
+
+                  setBatchLoading(true);
+                  try {
+                    const res = await fetch("http://localhost:5000/batch_analyze", {
+                      method: "POST",
+                      body: formData,
+                    });
+                    const data = await res.json();
+                    setBatchResults(data.results);
+                    setBatchIndex(0);
+                  } catch (err) {
+                    console.error("Batch analyze failed:", err);
+                  } finally {
+                    setBatchLoading(false);
+                  }
                 }}
                 className="block w-full text-sm text-zinc-400
                           file:mr-4 file:py-2 file:px-4
@@ -313,6 +343,8 @@ export default function ForensicToolDashboard() {
                           hover:file:bg-sky-500"
               />
             </div>
+            {batchLoading && <div className="mt-3 text-sky-400 text-sm">Analyzing images…</div>}
+
             {preview && (
               <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-center">
                 <img src={preview} alt="Preview" className="max-h-full object-contain" />
@@ -416,67 +448,169 @@ export default function ForensicToolDashboard() {
               </div>
             </div>
 
-            {preview ? (
-              <div className="relative w-full h-[500px] rounded-lg border border-zinc-800 overflow-hidden">
-                {/* Original image */}
-                <img
-                  src={preview}
-                  alt="Original"
-                  className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain"
-                />
+            {batchResults.length > 0 ? (
+              <>
+                {/* ---- BATCH MODE ---- */}
+                <div className="flex justify-center">
+                  <div className="relative rounded-lg border-3 border-sky-500 overflow-hidden w-auto max-h-[500px] h-[500px] flex items-center justify-center">
+                    {/* Original image */}
+                    <img
+                      src={`data:image/png;base64,${batchResults[batchIndex].original || ""}`}
+                      alt={batchResults[batchIndex].filename}
+                      className="max-h-full max-w-full object-contain"
+                    />
 
-                {/* Mask overlay */}
-                {maskImage && (
+                    {/* Mask overlay */}
+                    {batchResults[batchIndex].mask && (
+                      <img
+                        src={`data:image/png;base64,${batchResults[batchIndex].mask}`}
+                        alt="Forgery Mask"
+                        className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain pointer-events-none"
+                        style={{ opacity: maskOpacity }}
+                      />
+                    )}
+
+                    {/* Optional opacity slider */}
+                    {batchResults[batchIndex].mask && (
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={maskOpacity}
+                        onChange={(e) => setMaskOpacity(parseFloat(e.target.value))}
+                        className="absolute bottom-2 left-1/2 -translate-x-1/2 w-3/4"
+                      />
+                    )}
+                  </div>
+                </div>
+
+
+
+
+                {/* Navigation buttons */}
+                {batchResults.length > 1 && (
+                  <div className="flex justify-center gap-3 mt-3">
+                    <button
+                      onClick={() =>
+                        setBatchIndex((i) => (i - 1 + batchResults.length) % batchResults.length)
+                      }
+                      className="group flex items-center gap-1 px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-150 text-sky-500 ring-1 ring-sky-500 hover:ring-sky-400"
+                    >
+                      <ChevronLeft size={16} className="transition-transform duration-150 group-hover:-translate-x-1" />
+                      Prev
+                    </button>
+
+                    <button
+                      onClick={() => setBatchIndex((i) => (i + 1) % batchResults.length)}
+                      className="group flex items-center gap-1 px-3 py-1 rounded bg-zinc-800 hover:bg-zinc-700 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-150 text-sky-500 ring-1 ring-sky-500 hover:ring-sky-400"
+                    >
+                      Next
+                      <ChevronRight size={16} className="transition-transform duration-150 group-hover:translate-x-1" />
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : preview ? (
+              <>
+                {/* ---- SINGLE IMAGE MODE ---- */}
+                <div className="relative w-full h-[500px] rounded-lg border border-zinc-800 overflow-hidden">
                   <img
-                    src={maskImage}
-                    alt="Forgery Mask"
-                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain pointer-events-none"
-                    style={{ opacity: maskOpacity }}
+                    src={preview}
+                    alt="Original"
+                    className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain"
                   />
-                )}
 
-                {/* Optional opacity slider */}
-                {maskImage && (
-                  <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value={maskOpacity}
-                    onChange={(e) => setMaskOpacity(parseFloat(e.target.value))}
-                    className="absolute bottom-2 left-1/2 -translate-x-1/2 w-3/4"
-                  />
-                )}
-              </div>
+                  {maskImage && (
+                    <img
+                      src={maskImage}
+                      alt="Forgery Mask"
+                      className="absolute top-1/2 left-1/2 max-h-full max-w-full -translate-x-1/2 -translate-y-1/2 object-contain pointer-events-none"
+                      style={{ opacity: maskOpacity }}
+                    />
+                  )}
+
+                  {maskImage && (
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={maskOpacity}
+                      onChange={(e) => setMaskOpacity(parseFloat(e.target.value))}
+                      className="absolute bottom-2 left-1/2 -translate-x-1/2 w-3/4"
+                    />
+                  )}
+                </div>
+              </>
             ) : (
-              <VideoPlayerMock playing={playing} />
+              <>
+                {/* ---- NO IMAGE ---- */}
+                <VideoPlayerMock playing={playing} />
+              </>
             )}
+
 
 
 
             
             {/* Forgery Confidence Bar */}
             <Card className="mt-4">
-              <SectionTitle
-                right={<Badge tone={confidencePercent >= 50 ? "red" : "green"}>
-                  {confidencePercent >= 50 ? "FAKE" : "REAL"}
-                </Badge>}
+             <SectionTitle
+                right={
+                  <div
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      currentConfidencePercent >= 50
+                        ? "border border-red-500/30 text-red-500/90 bg-red-950"
+                        : "border border-green-500/30 text-green-500/90 bg-green-950"
+                    }`}
+                  >
+                    {currentConfidencePercent >= 50 ? "FAKE" : "REAL"}
+                  </div>
+                }
                 className="border-b-0"
               >
                 Forgery Confidence
               </SectionTitle>
+
               <div className="px-3 pb-3 pt-2">
-                <div className="relative h-6 w-full bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className={`relative h-6 w-full rounded-full overflow-hidden border ${
+                    currentConfidencePercent >= 50
+                      ? "bg-red-950 border-red-500/30"   // Fake: dark red bg + semi-transparent red border
+                      : "bg-green-950 border-green-500/30" // Real: dark green bg + semi-transparent green border
+                  }`}
+                >
+                  {/* Bar fill */}
                   <div
-                    className={`h-full ${confidencePercent >= 50 ? "bg-red-600" : "bg-emerald-500"}`}
-                    style={{ width: `${confidencePercent}%` }}
+                    className={`h-full ${
+                      currentConfidencePercent >= 50
+                        ? "bg-red-500/70"   // Fake fill
+                        : "bg-emerald-500"  // Real fill
+                    }`}
+                    style={{ width: `${currentConfidencePercent}%` }}
                   />
-                  <div className="absolute inset-0 flex items-center justify-center text-xs font-semibold text-zinc-100">
-                    {confidencePercent >= 50 ? `Fake ${confidencePercent.toFixed(1)}%` : `Real ${confidencePercent.toFixed(1)}%`}
+
+                  {/* Text overlay */}
+                  <div
+                    className={`absolute inset-0 flex items-center justify-center text-xs font-semibold ${
+                      currentConfidencePercent >= 50
+                        ? "text-red-100"   // matches fake badge
+                        : "text-green-500" // matches real badge
+                    }`}
+                  >
+                    {currentConfidencePercent === 0
+                      ? "Real – no forgery detected"
+                      : currentConfidencePercent >= 50
+                      ? `Fake ${currentConfidencePercent.toFixed(1)}%`
+                      : `Real ${currentConfidencePercent.toFixed(1)}%`}
                   </div>
                 </div>
               </div>
             </Card>
+
+
+
           </Card>
 
           {/* Bottom ingest (compact) */}
