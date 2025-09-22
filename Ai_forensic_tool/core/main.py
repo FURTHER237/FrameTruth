@@ -2,8 +2,12 @@ from fastapi import FastAPI, HTTPException, Header, Depends
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 from auth import user_manager  # Make sure auth.py is in the same folder or adjust import
+from report import router as report_router
+
+
 
 app = FastAPI()
+app.include_router(report_router)
 
 # CORS settings – allow frontend connections
 origins = [

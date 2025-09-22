@@ -20,6 +20,12 @@ import numpy as np
 import base64
 from io import BytesIO
 import os, tempfile, base64
+import json
+import base64, tempfile
+from flask import Flask, request, send_file
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet
 
 
 
@@ -93,6 +99,55 @@ def analyze():
         })
     finally:
         os.remove(tmp_path)
+
+@app.route("/api/generate-report", methods=["POST"])
+def generate_report():
+    data = request.get_json()
+    confidence = data.get("confidence", 0)
+    metadata = data.get("metadata", {})
+    image_b64 = data.get("image_base64")
+    mask_b64 = data.get("mask_base64")
+
+    if not image_b64:
+        return {"error": "No image provided"}, 400
+
+    # Decode images to temporary files
+    tmp_image = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    tmp_image.write(base64.b64decode(image_b64))
+    tmp_image.flush()
+
+    tmp_mask = None
+    if mask_b64:
+        tmp_mask = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tmp_mask.write(base64.b64decode(mask_b64))
+        tmp_mask.flush()
+
+    # Generate PDF
+    tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
+    styles = getSampleStyleSheet()
+    doc = SimpleDocTemplate(tmp_pdf.name, pagesize=A4)
+    story = []
+
+    story.append(Paragraph("<b>FrameTruth Forensic Report</b>", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"Confidence of Forgery: {confidence*100:.1f}%", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("<b>Metadata:</b>", styles["Heading2"]))
+    for k, v in metadata.items():
+        story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    story.append(RLImage(tmp_image.name, width=250, height=250))
+    story.append(Spacer(1, 12))
+    if tmp_mask:
+        story.append(RLImage(tmp_mask.name, width=250, height=250))
+
+    doc.build(story)
+
+    return send_file(tmp_pdf.name, as_attachment=True, download_name="forensic_report.pdf")
+
+
 
 @app.route("/batch_analyze", methods=["POST"])
 def batch_analyze():

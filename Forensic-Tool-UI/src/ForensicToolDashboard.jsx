@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from "react";
-import { 
+import {
   Play, Pause, SkipBack, SkipForward, Maximize2, Search, Image as ImageIcon,
   User, CheckCircle2, Mic2, AlertTriangle, Gauge, Hash, Copy,
   ChevronRight, ChevronLeft, Smartphone, ShieldCheck, Eye, EyeOff,
 } from "lucide-react";
 import DefaultImage from "./FrameTruth Image.png";
-
+import axios from "axios";
+import { FileText } from "lucide-react";
 
 
 
@@ -209,6 +210,35 @@ export default function ForensicToolDashboard() {
   };
 
 
+  const handleGenerateReport = async () => {
+    const active = batchResults.length > 0 ? batchResults[batchIndex] : result;
+
+    const payload = {
+      image_base64: active.original,  // already base64 string
+      mask_base64: active.mask,       // already base64 string
+      confidence: active.confidence,
+      metadata: active.meta || active.metadata,
+    };
+
+    const res = await axios.post(
+      "http://localhost:5000/api/generate-report",
+      payload,
+      { responseType: "blob" } // receive PDF
+    );
+
+
+    const blob = new Blob([res.data], { type: "application/pdf" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "forensic_report.pdf";
+    link.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+
+
+
 
   const handleMetadata = async () => {
     if (!selectedFile) return;
@@ -299,11 +329,11 @@ export default function ForensicToolDashboard() {
 
 
   return (
-    <div className="min-h-screen w-full bg-black text-zinc-100">
+    <div className="min-h-screen w-full bg-black sticky text-zinc-100">
       <div className="max-w-[1600px] mx-auto grid grid-cols-[260px_1fr_380px] gap-6 p-6">
         
         {/* Left column = new box + sidebar */}
-        <div className="flex flex-col gap-6 sticky top-6 self-start h-fit">
+        <div className="flex flex-col gap-6 top-6 self-start h-fit">
           {/* New Top-Left Box */}
           <Card className="h-[180px] flex flex-col px-5 pt-4 pb-3">
             <div className="text-lg font-semibold tracking-tight">Upload an Image</div>
@@ -370,11 +400,11 @@ export default function ForensicToolDashboard() {
               <div className="mt-3 flex items-center gap-2 text-sm text-sky-400">
                 <span>Analyzing images</span>
                 <div className="flex space-x-1">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => (
                     <span
                       key={i}
-                      className="inline-block w-1.5 h-1.5 bg-sky-400 rounded-full animate-pulse"
-                      style={{ animationDelay: `${i * 0.2}s` }}
+                      className="inline-block w-0.5 h-3 bg-sky-400 rounded-none animate-pulse"
+                      style={{ animationDelay: `${i * 0.1}s` }}
                     />
                   ))}
                 </div>
@@ -409,7 +439,7 @@ export default function ForensicToolDashboard() {
           
 
           {/* Sidebar */}
-          <div className="sticky top-[100px] h-[calc(100vh-100px)]">
+          <div className="sticky top-[100px] h-[calc(100vh-220px)]">
             <Card className="h-full flex flex-col">
               <div className="px-5 pt-4 pb-3">
                 <div className="text-lg font-semibold tracking-tight">Cases</div>
@@ -429,7 +459,7 @@ export default function ForensicToolDashboard() {
                 <SidebarItem icon={Mic2} label="Audio" badge={<Badge tone="green">VERIFIED</Badge>} />
               </div>
 
-              <div className="mt-auto px-5 py-4 border-t border-zinc-800/80">
+              <div className="mt-auto px-5 py-4 border-t border-sky-500/50">
                 <div className="text-sm text-zinc-400 mb-2">Ingest</div>
                 <ProgressBar label="Engines" value={90} />
                 <div className="h-2" />
@@ -444,10 +474,10 @@ export default function ForensicToolDashboard() {
         </div>
 
         {/* Main content */}
-        <main className="space-y-6">
+        <main className="sticky space-y-6">
           {/* Header strip */}
           <Card>
-            <div className="grid grid-cols-3 items-center px-5 py-3">
+            <div className="sticky grid grid-cols-3 items-center px-5 py-3">
               <div className="text-sm text-zinc-400">
                 <div className="uppercase tracking-widest text-[10px] text-zinc-500">Case ID</div>
                 <div className="font-medium text-zinc-200">source.mp4</div>
@@ -488,7 +518,7 @@ export default function ForensicToolDashboard() {
               <>
                 {/* ---- BATCH MODE ---- */}
                 <div className="flex justify-center">
-                  <div className="relative rounded-lg border-3 border-sky-500 overflow-hidden w-auto max-h-[500px] h-[500px] flex items-center justify-center">
+                  <div className="relative rounded-lg border-2 border-sky-500 overflow-hidden w-auto max-h-[500px] h-[500px] flex items-center justify-center">
                     {/* Original image */}
                     <img
                       src={`data:image/png;base64,${batchResults[batchIndex].original || ""}`}
@@ -655,7 +685,7 @@ export default function ForensicToolDashboard() {
 
           </Card>
 
-          {/* Bottom ingest (compact) */}
+          {/* Bottom ingest (compact)
           <Card className="px-5 py-4">
             <div className="text-sm text-zinc-400 mb-2">Ingest</div>
             <div className="grid grid-cols-4 gap-4">
@@ -664,7 +694,7 @@ export default function ForensicToolDashboard() {
               <MiniProgress label="Features" value={54} />
               <MiniProgress label="Classify" value={31} />
             </div>
-          </Card>
+          </Card> */}
         </main>
 
         {/* Right rail */}
@@ -701,14 +731,16 @@ export default function ForensicToolDashboard() {
      
           <Card>
             <SectionTitle>Metadata & Provenance</SectionTitle>
-            <div className="p-5 text-xs text-zinc-300 space-y-4">
+            {/* ↓ reduced padding top/bottom and spacing between elements */}
+            <div className="p-3 pt-2 pb-3 text-xs text-zinc-300 space-y-3">
               {batchResults.length > 0 && batchResults[batchIndex]?.meta ? (
                 <>
                   <pre>
-                    <div className="p-5 text-xs text-zinc-300 space-y-1">
+                    {/* ↓ removed extra padding, added tighter spacing */}
+                    <div className="p-3 pt-1 pb-2 text-xs text-zinc-300 space-y-1">
 
                       {/* ----- File Information ----- */}
-                      <div className="mt-2 font-semibold text-sky-500">[File Information]</div>
+                      <div className="mt-1 font-semibold text-sky-500">[File Information]</div>
                       <div>File: {batchResults[batchIndex].filename}</div>
                       <div>Size: {batchResults[batchIndex].meta.size_bytes.toLocaleString()} bytes</div>
                       <div className="flex items-center gap-2 text-xs">
@@ -720,21 +752,23 @@ export default function ForensicToolDashboard() {
                           {batchResults[batchIndex].meta.sha256}
                         </code>
                         <button
-                          onClick={() => navigator.clipboard.writeText(batchResults[batchIndex].meta.sha256)}
+                          onClick={() =>
+                            navigator.clipboard.writeText(batchResults[batchIndex].meta.sha256)
+                          }
                           className="ml-auto inline-flex items-center gap-1 text-xs text-sky-400 hover:underline"
                         >
-                          <Copy className="h-3.5 w-3.5"/>Copy
+                          <Copy className="h-3.5 w-3.5" />Copy
                         </button>
                       </div>
 
                       {/* ----- File Timestamps ----- */}
-                      <div className="mt-2 font-semibold text-sky-500">[File Timestamps]</div>
+                      <div className="mt-1 font-semibold text-sky-500">[File Timestamps]</div>
                       <div>Created: {batchResults[batchIndex].meta.created}</div>
                       <div>Modified: {batchResults[batchIndex].meta.modified}</div>
                       <div>Analysed: {batchResults[batchIndex].meta.analysed}</div>
 
                       {/* ----- Camera Information ----- */}
-                      <div className="mt-2 font-semibold text-sky-500">[Camera Information]</div>
+                      <div className="mt-1 font-semibold text-sky-500">[Camera Information]</div>
                       <div>Make: {batchResults[batchIndex].meta.make || "N/A"}</div>
                       <div>Model: {batchResults[batchIndex].meta.model || "N/A"}</div>
                       <div>Serial Number: {batchResults[batchIndex].meta.serial || "N/A"}</div>
@@ -742,13 +776,25 @@ export default function ForensicToolDashboard() {
                       <div>Date Taken: {batchResults[batchIndex].meta.date_taken || "N/A"}</div>
 
                       {/* ----- Location Data ----- */}
-                      <div className="mt-2 font-semibold text-sky-500">[Location Data]</div>
-                      <div>Latitude: {batchResults[batchIndex].meta.latitude != null ? batchResults[batchIndex].meta.latitude.toFixed(6) : "N/A"}</div>
-                      <div>Longitude: {batchResults[batchIndex].meta.longitude != null ? batchResults[batchIndex].meta.longitude.toFixed(6) : "N/A"}</div>
-                      <div>Altitude: {batchResults[batchIndex].meta.altitude != null ? batchResults[batchIndex].meta.altitude.toFixed(2) + " m" : "N/A"}</div>
+                      <div className="mt-1 font-semibold text-sky-500">[Location Data]</div>
+                      <div>
+                        Latitude: {batchResults[batchIndex].meta.latitude != null
+                          ? batchResults[batchIndex].meta.latitude.toFixed(6)
+                          : "N/A"}
+                      </div>
+                      <div>
+                        Longitude: {batchResults[batchIndex].meta.longitude != null
+                          ? batchResults[batchIndex].meta.longitude.toFixed(6)
+                          : "N/A"}
+                      </div>
+                      <div>
+                        Altitude: {batchResults[batchIndex].meta.altitude != null
+                          ? batchResults[batchIndex].meta.altitude.toFixed(2) + " m"
+                          : "N/A"}
+                      </div>
 
                       {/* ----- Software / Editing ----- */}
-                      <div className="mt-2 font-semibold text-sky-500">[Software / Editing]</div>
+                      <div className="mt-1 font-semibold text-sky-500">[Software / Editing]</div>
                       <div className="flex flex-col gap-1 text-xs">
                         {batchResults[batchIndex].meta.software && (
                           <div className="flex items-center gap-2">
@@ -778,8 +824,34 @@ export default function ForensicToolDashboard() {
                   </pre>
                 </>
               ) : (
+                <div className="text-zinc-400">Upload images to view metadata.</div>
+              )}
+            </div>
+          </Card>
+
+
+
+
+
+           
+
+          {/* ✅ New Report Generation Card */}
+          <Card>
+            <SectionTitle>Generate Report</SectionTitle>
+            <div className="p-5 text-xs text-zinc-300 space-y-4">
+              {(batchResults.length > 0 || result) ? (
+                <div className="flex justify-center">
+                  <button
+                    onClick={handleGenerateReport}
+                    className="bg-sky-600 hover:bg-sky-500 text-white font-semibold px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <FileText className="mr-2 h-4 w-4" />
+                    Generate PDF Report
+                  </button>
+                </div>
+              ) : (
                 <div className="text-zinc-400">
-                  Upload images to view metadata.
+                  Upload images to enable report generation.
                 </div>
               )}
             </div>
@@ -788,28 +860,8 @@ export default function ForensicToolDashboard() {
 
 
 
-           
 
-          <Card>
-            <SectionTitle>Mobile Check</SectionTitle>
-            <div className="p-5">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-                <div className="flex items-center gap-3 text-sm text-zinc-300"><Smartphone className="h-4 w-4"/> BagOAT</div>
-                <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-4">
-                  <div>
-                    <div className="text-xs text-zinc-500">Pulldown</div>
-                    <div className="text-2xl font-semibold">{score}%</div>
-                  </div>
-                  <button className="px-3 py-1.5 rounded-lg bg-sky-600/90 hover:bg-sky-500 text-sm">Report</button>
-                </div>
-              </div>
-            </div>
-          </Card>
-
-
-
-
-          <Card>
+          {/* <Card>
             <SectionTitle right={<div className="text-sky-400 text-xs flex items-center gap-1">SCORE <ChevronRight className="h-3 w-3"/></div>}>Findings</SectionTitle>
             <div className="p-5">
               <div className="flex items-center gap-6">
@@ -821,16 +873,7 @@ export default function ForensicToolDashboard() {
                 </div>
               </div>
             </div>
-          </Card>
-          
-      
-
-
-
-
-
-
-
+          </Card> */}
         </aside>
       </div>
     </div>
