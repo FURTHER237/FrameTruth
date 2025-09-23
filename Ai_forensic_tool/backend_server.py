@@ -26,8 +26,10 @@ from flask import Flask, request, send_file
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
-
-
+import sqlite3
+from flask import request
+from functools import wraps
+from flask import request, jsonify
 
 app = Flask(__name__)
 CORS(app)
@@ -46,6 +48,132 @@ print("✓ HiFi model ready!")
 #     encoded = base64.b64encode(buffer.read()).decode("utf-8")
 #     return jsonify({"image": encoded})  # <-- frontend will decode
 
+
+DB_PATH = "core/analysis_logs.db"
+
+def extract_metadata_dict(image_path: str) -> dict:
+    """Return a metadata dict for an image file."""
+    try:
+        stat = os.stat(image_path)
+        sha256 = sha256sum(image_path)
+        size_bytes = stat.st_size
+
+        with open(image_path, "rb") as f:
+            tags = exifread.process_file(f, details=False)
+
+        make       = str(tags.get("Image Make", "")) or None
+        model      = str(tags.get("Image Model", "")) or None
+        lens       = str(tags.get("EXIF LensModel", "")) or None
+        date_taken = str(tags.get("EXIF DateTimeOriginal", "")) or None
+        serial     = str(tags.get("EXIF BodySerialNumber", "")) or "N/A"
+        software    = str(tags.get("Image Software", "")) or "N/A"
+        description = str(tags.get("Image ImageDescription", "")) or "N/A"
+        created  = str(tags.get("EXIF DateTimeOriginal", "")) or "N/A"
+        modified = str(tags.get("EXIF DateTimeDigitized", "")) or "N/A"
+        analysed = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+        lat, lon, alt = extract_gps(tags)
+
+        return {
+            "sha256": sha256,
+            "size_bytes": size_bytes,
+            "created": created,
+            "modified": modified,
+            "analysed": analysed,
+            "make": make,
+            "model": model,
+            "serial": serial,
+            "lens": lens,
+            "date_taken": date_taken,
+            "software": software,
+            "description": description,
+            "latitude": lat,
+            "longitude": lon,
+            "altitude": alt,
+        }
+    except Exception as e:
+        print("[DEBUG] Metadata extraction failed:", e)
+        return {}
+
+
+def get_current_user_from_token():
+    return {"username": "test_user"}  # temporary stub
+
+def log_analysis(username, filename, confidence, is_forged, metadata, image_b64, mask_b64=None):
+    conn = None
+    try:
+        # ensure metadata is a dict
+        if callable(metadata):
+            raise TypeError("metadata is a function, not a dict")
+
+        safe_meta = {k: (v() if callable(v) else v) for k, v in metadata.items()}
+
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO analysis_logs
+            (username, filename, confidence, is_forged, metadata, image_base64, mask_base64)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            username,
+            filename,
+            float(confidence) if confidence is not None else 0.0,
+            int(bool(is_forged)),
+            json.dumps(safe_meta, default=str),
+            image_b64,
+            mask_b64
+        ))
+        conn.commit()
+        print(f"[DEBUG] Inserted row for {filename} by {username}")
+    except Exception as e:
+        print("❌ Failed to log analysis:", e)
+    finally:
+        if conn:   # ✅ only close if it was successfully opened
+            conn.close()
+
+
+
+
+
+
+# def get_current_user_from_token():
+#     auth = request.headers.get("Authorization")
+#     if not auth or not auth.startswith("Bearer "):
+#         return None
+#     token = auth.replace("Bearer ", "").strip()
+#     user = user_manager.validate_session(token)  # your session/token check
+#     return user
+
+def login_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        user = get_current_user_from_token()
+        if not user:
+            return jsonify({"error": "Unauthorized"}), 401
+        return f(user, *args, **kwargs)  # pass user to the endpoint
+    return decorated
+
+
+# def log_analysis(username, filename, confidence, is_forged, metadata, image_b64, mask_b64=None):
+#     conn = sqlite3.connect(DB_PATH)
+#     cursor = conn.cursor()
+
+#     cursor.execute("""
+#         INSERT INTO analysis_logs
+#         (username, filename, confidence, is_forged, metadata, image_base64, mask_base64)
+#         VALUES (?, ?, ?, ?, ?, ?, ?)
+#     """, (
+#         username,
+#         filename,
+#         confidence,
+#         int(is_forged),  # SQLite uses int for boolean
+#         json.dumps(metadata),
+#         image_b64,
+#         mask_b64
+#     ))
+
+#     conn.commit()
+#     conn.close()
+
 def format_time(epoch_time):
     return datetime.fromtimestamp(epoch_time, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
@@ -53,52 +181,62 @@ def safe_exif(tag):
     return str(tags.get(tag, "")) or "N/A"
 
 @app.route("/analyze", methods=["POST"])
-def analyze():
+@login_required
+def analyze(user):
     file = request.files["file"]
 
-    # Save to a temporary file so HiFi can read it
     with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
         tmp_path = tmp.name
         file.save(tmp_path)
 
     try:
-        # Open the original image to know its size
         img = Image.open(tmp_path).convert("RGB")
 
-        # Run the HiFi model
         results = hifi_model.analyze_image(tmp_path, save_mask=True)
-
         detection = results["detection"]
         mask_array = results["localization"]["mask"]
 
-        # ---- Normalize mask to 0-1 range ----
-        mask_min = mask_array.min()
-        mask_max = mask_array.max()
-        mask_norm = (mask_array - mask_min) / (mask_max - mask_min + 1e-8)
+        # Encode mask
+        encoded_mask = None
+        if mask_array is not None:
+            mask_min, mask_max = mask_array.min(), mask_array.max()
+            mask_norm = (mask_array - mask_min) / (mask_max - mask_min + 1e-8)
+            mask_img = Image.fromarray((mask_norm * 255).astype(np.uint8))
+            mask_img = mask_img.resize(img.size, resample=Image.BILINEAR)
+            buffer = BytesIO()
+            mask_img.save(buffer, format="PNG")
+            buffer.seek(0)
+            encoded_mask = base64.b64encode(buffer.read()).decode("utf-8")
 
-        # Convert to PIL image and resize to match original
-        mask_img = Image.fromarray((mask_norm * 255).astype(np.uint8))
-        mask_img = mask_img.resize(img.size, resample=Image.BILINEAR)
-
-        # Encode mask to base64
+        # Encode original image
         buffer = BytesIO()
-        mask_img.save(buffer, format="PNG")
+        img.save(buffer, format="PNG")
         buffer.seek(0)
-        encoded_mask = base64.b64encode(buffer.read()).decode("utf-8")
+        encoded_img = base64.b64encode(buffer.read()).decode("utf-8")
 
-        # ---- Debug output ----
-        print(f"Detection output: {detection}")
-        print(f"Mask stats -> min: {mask_min} max: {mask_max} "
-              f"-> normalized min: {mask_norm.min()} max: {mask_norm.max()}")
-        print("Sending mask base64 length:", len(encoded_mask))
+        # Extract metadata
+        metadata = extract_metadata(tmp_path)
+
+        # Log to database
+        log_analysis(
+            username=user["username"],
+            filename=file.filename,
+            confidence=detection["probability"],
+            is_forged=detection["is_forged"],
+            metadata = extract_metadata(tmp_path),
+            image_b64=encoded_img,
+            mask_b64=encoded_mask
+        )
 
         return jsonify({
             "mask": encoded_mask,
             "confidence": float(detection["probability"]),
             "is_forged": bool(detection["is_forged"]),
         })
+
     finally:
         os.remove(tmp_path)
+
 
 @app.route("/api/generate-report", methods=["POST"])
 def generate_report():
@@ -160,6 +298,13 @@ def batch_analyze():
       - mask (base64 PNG) or None
       - original image (base64 PNG) for display
     """
+    # ✅ Get the username from the header sent by the frontend
+    username = request.headers.get("X-Username")
+
+    # (Optional) handle missing username
+    if not username:
+        return jsonify({"error": "Username header missing"}), 400
+
     if "files" not in request.files:
         return jsonify({"error": "No files uploaded"}), 400
 
@@ -211,6 +356,20 @@ def batch_analyze():
             # Confidence & forged flag
             confidence = float(detection.get("probability") or 0.0)
             is_forged = bool(detection.get("is_forged", False))
+
+            
+
+            # Log to database
+            meta_dict = extract_metadata_dict(tmp_path)   # ✅ CALL the helper
+            log_analysis(
+                username=username,
+                filename=f.filename,
+                confidence=confidence,
+                is_forged=is_forged,
+                metadata=meta_dict,
+                image_b64=encoded_original,
+                mask_b64=encoded_mask
+            )
 
             results.append({
                 "filename": f.filename,

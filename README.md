@@ -78,3 +78,16 @@ npm audit fix --force
 That’s it — you can now run the UI locally.
 
 # FrameTruth
+
+### How to run the webpage with all functionality
+Three terminals are required, one for front end, one for back end processing, and one for database access:
+
+In "FrameTruth\AI_forensic_tool" run python backend_server.py
+In "FrameTruth\Forensic-Tool-UI" run npm run dev
+In "FrameTruth\Ai_forensic_tool" run python -m uvicorn core.main:app --reload --host 127.0.0.1 --port 
+
+You will likely get a few errors to begin with, just pip install the missing modules until it works.
+
+You will need a valid username and password to access the main website. We can create more, but for now we can use:
+Username: DanielE
+Password: 12345678

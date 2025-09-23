@@ -368,6 +368,9 @@ export default function ForensicToolDashboard() {
                     const analyzeRes = await fetch("http://localhost:5000/batch_analyze", {
                       method: "POST",
                       body: analyzeFormData,
+                      headers: {
+                        "X-Username": user   // ✅ send the actual user
+                      }
                     });
                     const analyzeJson = await analyzeRes.json();
 
