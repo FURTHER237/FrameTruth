@@ -44,6 +44,18 @@ const Badge = ({ tone = "slate", children }) => {
   );
 };
 
+const SidebarItem = ({ icon: Icon, label, description, badge }) => (
+  <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
+    <Icon className="h-5 w-5 text-sky-400" />
+    <div className="flex-1 min-w-0">
+      <div className="text-sm text-white truncate">{label}</div>
+      <div className="text-xs text-zinc-400 truncate">{description}</div>
+    </div>
+    {badge}
+  </div>
+);
+
+
 const IconButton = ({ icon: Icon, label, onClick, active=false }) => (
   <button
     onClick={onClick}
@@ -135,6 +147,7 @@ export default function ForensicToolDashboard() {
   const [user, setUser] = useState(() => localStorage.getItem("username") || null);
   const [authenticated, setAuthenticated] = useState(!!user);
   const [loginUsername, setLoginUsername] = useState("");
+  const [logs, setLogs] = useState([]);
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   
@@ -152,6 +165,7 @@ export default function ForensicToolDashboard() {
   const [batchResults, setBatchResults] = useState([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchLoading, setBatchLoading] = useState(false);
+  
 
 
 
@@ -270,6 +284,20 @@ export default function ForensicToolDashboard() {
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
   };
+
+
+  // Fetch logs
+  useEffect(() => {
+    fetch("http://localhost:5000/logs")
+      .then(res => res.json())
+      .then(data => {
+        // Sort by analysed_at descending (latest first)
+        const sorted = data.sort((a, b) => new Date(b.analysed_at) - new Date(a.analysed_at));
+        setLogs(sorted);
+      })
+      .catch(err => console.error("Failed to load logs", err));
+  }, []);
+  
   useEffect(() => {
     if (!playing) return;
     const id = setInterval(() => setProgress(p => (p >= 100 ? 0 : p + 1)), 120);
@@ -293,6 +321,7 @@ export default function ForensicToolDashboard() {
   const currentConfidencePercent = currentBatch?.confidence != null ? currentBatch.confidence * 100 : 0;
   const currentOriginal = currentBatch?.original ? `data:image/png;base64,${currentBatch.original}` : null;
   const currentFilename = currentBatch?.filename || "";
+
 
   
 
@@ -329,8 +358,8 @@ export default function ForensicToolDashboard() {
 
 
   return (
-    <div className="min-h-screen w-full bg-black sticky text-zinc-100">
-      <div className="max-w-[1600px] mx-auto grid grid-cols-[260px_1fr_380px] gap-6 p-6">
+    <div className="min-h-screen w-full bg-black sticky text-zinc-100 ">
+      <div className="max-w-[1600px] mx-auto grid grid-cols-[260px_1fr_380px] gap-6 p-6 ">
         
         {/* Left column = new box + sidebar */}
         <div className="flex flex-col gap-6 top-6 self-start h-fit">
@@ -455,23 +484,22 @@ export default function ForensicToolDashboard() {
                 </div>
               </div>
 
-              <div className="px-3 space-y-1.5 overflow-y-auto">
-                <SidebarItem icon={ImageIcon} label="Image" badge={<Badge tone="amber">SUSPECT</Badge>} active />
-                <SidebarItem icon={User} label="Suspect" badge={<Badge tone="slate">SUSPECT</Badge>} />
-                <SidebarItem icon={CheckCircle2} label="Verified" badge={<Badge tone="green">VERIFIED</Badge>} />
-                <SidebarItem icon={Mic2} label="Audio" badge={<Badge tone="green">VERIFIED</Badge>} />
+              <div className="h-[calc(500px)] px-1 space-y-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-sky-600 scrollbar-track-black hover:scrollbar-thumb-sky-500 pb-2">
+                {logs.map((log, idx) => (
+                  <SidebarItem
+                    key={idx}
+                    icon={ImageIcon}
+                    label={`${log.username} • ${new Date(log.analysed_at).toLocaleString()}`}
+                    description={log.filename}
+                    badge={
+                      <Badge tone={log.is_forged ? "amber" : "green"}>
+                        {log.is_forged ? "FORGED" : "VERIFIED"}
+                      </Badge>
+                    }
+                  />
+                ))}
               </div>
 
-              <div className="mt-auto px-5 py-4 border-t border-sky-500/50">
-                <div className="text-sm text-zinc-400 mb-2">Ingest</div>
-                <ProgressBar label="Engines" value={90} />
-                <div className="h-2" />
-                <ProgressBar label="Frames" value={72} />
-                <div className="h-2" />
-                <ProgressBar label="Features" value={54} />
-                <div className="h-2" />
-                <ProgressBar label="Classify" value={31} />
-              </div>
             </Card>
           </div>
         </div>
@@ -883,13 +911,13 @@ export default function ForensicToolDashboard() {
   );
 }
 
-const SidebarItem = ({ icon: Icon, label, badge, active=false }) => (
-  <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition border ${active?"bg-zinc-900/70 border-zinc-700":"bg-zinc-950 border-zinc-900 hover:border-zinc-800"}`}>
-    <Icon className="h-4.5 w-4.5 text-zinc-300"/>
-    <span className="text-sm flex-1 text-zinc-200 text-left">{label}</span>
-    {badge}
-  </button>
-);
+// const SidebarItem = ({ icon: Icon, label, badge, active=false }) => (
+//   <button className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition border ${active?"bg-zinc-900/70 border-zinc-700":"bg-zinc-950 border-zinc-900 hover:border-zinc-800"}`}>
+//     <Icon className="h-4.5 w-4.5 text-zinc-300"/>
+//     <span className="text-sm flex-1 text-zinc-200 text-left">{label}</span>
+//     {badge}
+//   </button>
+// );
 
 const Row = ({ icon: Icon, title, iconClass }) => (
   <div className="flex items-center gap-2 text-sm">

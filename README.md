@@ -84,7 +84,7 @@ Three terminals are required, one for front end, one for back end processing, an
 
 In "FrameTruth\AI_forensic_tool" run python backend_server.py
 In "FrameTruth\Forensic-Tool-UI" run npm run dev
-In "FrameTruth\Ai_forensic_tool" run python -m uvicorn core.main:app --reload --host 127.0.0.1 --port 
+In "FrameTruth\Ai_forensic_tool" run python -m uvicorn core.main:app --reload --host 127.0.0.1 --port 8000
 
 You will likely get a few errors to begin with, just pip install the missing modules until it works.
 

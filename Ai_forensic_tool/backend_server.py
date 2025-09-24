@@ -49,7 +49,8 @@ print("✓ HiFi model ready!")
 #     return jsonify({"image": encoded})  # <-- frontend will decode
 
 
-DB_PATH = "core/analysis_logs.db"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH  = os.path.join(BASE_DIR, "core", "analysis_logs.db")
 
 def extract_metadata_dict(image_path: str) -> dict:
     """Return a metadata dict for an image file."""
@@ -386,6 +387,19 @@ def batch_analyze():
     print("Batch analyze complete. Total results:", len(results))
     return jsonify({"results": results})
 
+@app.route("/logs", methods=["GET"])
+def get_logs():
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT username, analysed_at, filename, is_forged
+        FROM analysis_logs
+        ORDER BY datetime(analysed_at) DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
 
 
 
