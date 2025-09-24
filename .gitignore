@@ -3,3 +3,4 @@
 
 # Optionally, ignore everything in output folder (if you don't want to track any outputs)
 Ai_forensic_tool/output/
+Ai_forensic_tool/core/analysis_logs.db
