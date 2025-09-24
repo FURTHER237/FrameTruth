@@ -44,8 +44,11 @@ const Badge = ({ tone = "slate", children }) => {
   );
 };
 
-const SidebarItem = ({ icon: Icon, label, description, badge }) => (
-  <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
+const SidebarItem = ({ icon: Icon, label, description, badge, onClick }) => (
+  <div
+    onClick={onClick} // ✅ attach the click handler
+    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer"
+  >
     <Icon className="h-5 w-5 text-sky-400" />
     <div className="flex-1 min-w-0">
       <div className="text-xs text-white truncate">{label}</div>
@@ -54,6 +57,7 @@ const SidebarItem = ({ icon: Icon, label, description, badge }) => (
     {badge}
   </div>
 );
+
 
 
 
@@ -294,6 +298,7 @@ export default function ForensicToolDashboard() {
     fetch("http://localhost:5000/logs")
       .then(res => res.json())
       .then(data => {
+        console.log("Logs fetched from backend:", data);
         // Sort by analysed_at descending (latest first)
         const sorted = data.sort((a, b) => new Date(b.analysed_at) - new Date(a.analysed_at));
         setLogs(sorted);
@@ -320,6 +325,34 @@ export default function ForensicToolDashboard() {
     log.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
     log.filename.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const handleLogClick = async (logId) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/generate-report-from-log/${logId}`);
+      if (!res.ok) {
+        const text = await res.text();
+        console.error("Backend error:", text);
+        alert("Failed to generate report. Check console for details.");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "forensic_report.pdf";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generating report:", err);
+      alert("Network or server error while generating report.");
+    }
+  };
+
+
+
 
 
  
@@ -508,6 +541,7 @@ export default function ForensicToolDashboard() {
                         {log.is_forged ? "FORGED" : "VERIFIED"}
                       </Badge>
                     }
+                    onClick={() => handleLogClick(log.id)}
                   />
                 ))}
               </div>

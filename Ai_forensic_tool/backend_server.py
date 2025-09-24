@@ -238,6 +238,97 @@ def analyze(user):
     finally:
         os.remove(tmp_path)
 
+@app.route("/api/generate-report-from-log/<int:log_id>", methods=["GET"])
+def generate_report_from_log(log_id):
+    import io, json, base64
+    from flask import send_file
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import getSampleStyleSheet
+    from PIL import Image
+    import sqlite3
+
+    # Make sure DB_PATH points to correct file
+    DB_PATH = os.path.join(BASE_DIR, "core", "analysis_logs.db")
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT username, filename, analysed_at, is_forged, confidence, metadata, image_base64, mask_base64
+        FROM analysis_logs WHERE id = ?
+    """, (log_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return {"error": "Log entry not found"}, 404
+
+    username, filename, analysed_at, is_forged, confidence, metadata_json, image_b64, mask_b64 = row
+    metadata = json.loads(metadata_json) if metadata_json else {}
+
+    confidence_val = float(confidence or 0.0) * 100
+    analysed_at = analysed_at or "N/A"
+
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("<b>FrameTruth Forensic Report</b>", styles["Title"]))
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(f"User: {username}", styles["Normal"]))
+    story.append(Paragraph(f"Filename: {filename}", styles["Normal"]))
+    story.append(Paragraph(f"Analysis Date: {analysed_at}", styles["Normal"]))
+    story.append(Paragraph(f"Forgery Detected: {'Yes' if is_forged else 'No'}", styles["Normal"]))
+    story.append(Paragraph(f"Confidence: {confidence_val:.1f}%", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    story.append(Paragraph("<b>Metadata:</b>", styles["Heading2"]))
+    if metadata:
+        for k, v in metadata.items():
+            story.append(Paragraph(f"{k}: {v}", styles["Normal"]))
+    else:
+        story.append(Paragraph("No metadata available.", styles["Normal"]))
+    story.append(Spacer(1, 12))
+
+    def image_from_b64(b64data):
+        if not b64data:
+            return None
+        try:
+            img_bytes = io.BytesIO(base64.b64decode(b64data))
+            pil_img = Image.open(img_bytes)
+            out_bytes = io.BytesIO()
+            pil_img.save(out_bytes, format="PNG")
+            out_bytes.seek(0)
+            return RLImage(out_bytes, width=250, height=250)
+        except Exception as e:
+            print("[DEBUG] Failed to decode image:", e)
+            return None
+
+    if image_b64:
+        img = image_from_b64(image_b64)
+        if img:
+            story.append(img)
+            story.append(Spacer(1, 12))
+    if mask_b64:
+        mask_img = image_from_b64(mask_b64)
+        if mask_img:
+            story.append(mask_img)
+
+    pdf_bytes = io.BytesIO()
+    doc = SimpleDocTemplate(pdf_bytes, pagesize=A4)
+    doc.build(story)
+    pdf_bytes.seek(0)
+
+    return send_file(
+        pdf_bytes,
+        as_attachment=True,
+        download_name="forensic_report.pdf",
+        mimetype="application/pdf"
+    )
+
+
+
+
+
 
 @app.route("/api/generate-report", methods=["POST"])
 def generate_report():
@@ -393,7 +484,7 @@ def get_logs():
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute("""
-        SELECT username, analysed_at, filename, is_forged
+        SELECT id, username, analysed_at, filename, is_forged
         FROM analysis_logs
         ORDER BY datetime(analysed_at) DESC
     """)
