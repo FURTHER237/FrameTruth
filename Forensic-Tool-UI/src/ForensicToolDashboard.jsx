@@ -48,12 +48,13 @@ const SidebarItem = ({ icon: Icon, label, description, badge }) => (
   <div className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer">
     <Icon className="h-5 w-5 text-sky-400" />
     <div className="flex-1 min-w-0">
-      <div className="text-sm text-white truncate">{label}</div>
+      <div className="text-xs text-white truncate">{label}</div>
       <div className="text-xs text-zinc-400 truncate">{description}</div>
     </div>
     {badge}
   </div>
 );
+
 
 
 const IconButton = ({ icon: Icon, label, onClick, active=false }) => (
@@ -165,6 +166,7 @@ export default function ForensicToolDashboard() {
   const [batchResults, setBatchResults] = useState([]);
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchLoading, setBatchLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   
 
 
@@ -223,6 +225,7 @@ export default function ForensicToolDashboard() {
     }
   };
 
+  
 
   const handleGenerateReport = async () => {
     const active = batchResults.length > 0 ? batchResults[batchIndex] : result;
@@ -312,6 +315,12 @@ export default function ForensicToolDashboard() {
   const copy = async (txt) => {
     try { await navigator.clipboard.writeText(txt); alert("Copied to clipboard"); } catch {}
   };
+
+  const filteredLogs = logs.filter(log =>
+    log.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    log.filename.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
 
  
   
@@ -431,8 +440,8 @@ export default function ForensicToolDashboard() {
             {batchLoading && (
               <div className="mt-3 flex items-center gap-2 text-sm text-sky-400">
                 <span>Analyzing images</span>
-                <div className="flex space-x-1">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map((i) => (
+                <div className="flex space-x-0.5">
+                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map((i) => (
                     <span
                       key={i}
                       className="inline-block w-0.5 h-3 bg-sky-400 rounded-none animate-pulse"
@@ -478,14 +487,17 @@ export default function ForensicToolDashboard() {
                 <div className="mt-3 relative">
                   <input
                     placeholder="Search"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-sky-600"
                   />
+
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
                 </div>
               </div>
 
               <div className="h-[calc(500px)] px-1 space-y-1.5 overflow-y-auto scrollbar-thin scrollbar-thumb-sky-600 scrollbar-track-black hover:scrollbar-thumb-sky-500 pb-2">
-                {logs.map((log, idx) => (
+                {filteredLogs.map((log, idx) => (
                   <SidebarItem
                     key={idx}
                     icon={ImageIcon}
@@ -499,6 +511,7 @@ export default function ForensicToolDashboard() {
                   />
                 ))}
               </div>
+
 
             </Card>
           </div>
