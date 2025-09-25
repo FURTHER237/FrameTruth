@@ -33,7 +33,7 @@ class HiFiModel:
     - Pixel-level forgery localization
     """
     
-    def __init__(self, weights_path=None, device=None, verbose=True):
+    def __init__(self, weights_path=None, device=None, verbose=True, confidence_threshold=0.5, center_radius_dir=None, input_size=256):
         """
         Initialize the HiFi model wrapper
         
@@ -41,8 +41,15 @@ class HiFiModel:
             weights_path (str): Path to model weights directory
             device (str): Device to use ('cuda', 'cpu', or None for auto-detect)
             verbose (bool): Whether to print initialization messages
+            confidence_threshold (float): Minimum confidence threshold for forgery detection (0.0-1.0)
+            center_radius_dir (str | None): Directory containing radius_center.pth (defaults to weights_path or 'center')
+            input_size (int): Square input size to resize images to (default 256)
         """
         self.verbose = verbose
+        self.confidence_threshold = confidence_threshold
+        # If center dir not specified, default to weights_path if provided, else 'center'
+        self.center_radius_dir = center_radius_dir or weights_path or 'center'
+        self.input_size = int(input_size)
         
         # Set device
         if device is None:
@@ -52,6 +59,9 @@ class HiFiModel:
         
         if self.verbose:
             print(f"Using device: {self.device}")
+            print(f"Confidence threshold: {self.confidence_threshold}")
+            print(f"Center/Radius directory: {self.center_radius_dir}")
+            print(f"Input size: {self.input_size}")
         
         # Initialize models
         try:
@@ -79,7 +89,7 @@ class HiFiModel:
         
         # Initialize loss function for localization
         try:
-            center, radius = load_center_radius_api()
+            center, radius = load_center_radius_api(center_radius_dir=self.center_radius_dir, device=self.device)
             self.loss_function = IsolatingLossFunction(center, radius).to(self.device)
             if self.verbose:
                 print("Loss function initialized successfully")
@@ -125,13 +135,26 @@ class HiFiModel:
         """
         # Load image
         image = imageio.imread(image_path)
+        
+        # Handle RGBA images by converting to RGB
+        if image.shape[2] == 4:  # RGBA
+            # Convert RGBA to RGB by compositing over white background
+            alpha = image[:, :, 3:4] / 255.0
+            rgb = image[:, :, :3]
+            white_bg = np.ones_like(rgb) * 255
+            image = (rgb * alpha + white_bg * (1 - alpha)).astype(np.uint8)
+        elif image.shape[2] == 3:  # RGB
+            pass  # Already correct
+        else:
+            raise ValueError(f"Unsupported image format with {image.shape[2]} channels")
+        
         original_image = Image.fromarray(image)
         
         # Store original dimensions
         original_size = original_image.size  # (width, height)
         
         # Resize to 256x256
-        image = original_image.resize((256, 256), resample=Image.BICUBIC)
+        image = original_image.resize((self.input_size, self.input_size), resample=Image.BICUBIC)
         image = np.asarray(image)
         
         # Normalize to [0, 1]
@@ -140,17 +163,24 @@ class HiFiModel:
         # Convert to tensor and add batch dimension
         image = torch.from_numpy(image)
         image = image.permute(2, 0, 1)  # HWC to CHW
+        
+        # Apply ImageNet normalization expected by many backbones
+        mean = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).view(3, 1, 1)
+        std = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).view(3, 1, 1)
+        image = (image - mean) / std
+        
         image = torch.unsqueeze(image, 0)  # Add batch dimension
         
         return image.to(self.device), original_size
     
-    def detect(self, image_path, verbose=False):
+    def detect(self, image_path, verbose=False, use_threshold=True, tta=False, prob_mode='auto'):
         """
         Perform binary classification (real/forged)
         
         Args:
             image_path (str): Path to the image file
             verbose (bool): Whether to print results
+            use_threshold (bool): Whether to use confidence threshold for decision
             
         Returns:
             tuple: (result, probability) where result is 0 (real) or 1 (forged)
@@ -163,17 +193,51 @@ class HiFiModel:
                 # Extract features
                 features = self.feature_extractor(img_input)
                 
-                # Perform detection
-                mask1_fea, mask1_binary, out0, out1, out2, out3 = self.detector(features, img_input)
-                
-                # Get classification result
-                res, prob = one_hot_label_new(out3)
-                res = level_1_convert(res)[0]
+                def forward_once(tensor):
+                    mask1_fea, mask1_binary, out0, out1, out2, out3 = self.detector(features if tensor is img_input else self.feature_extractor(tensor), tensor)
+                    # Softmax over classes
+                    x = torch.nn.functional.softmax(out3, dim=1)
+                    prob_real = float(x[0, 0].detach().cpu().numpy())
+                    # Default forged prob is 1 - P(real)
+                    prob_forged_default = 1.0 - prob_real
+                    # Alternative forged prob as x[:,1] if desired
+                    prob_forged_x1 = float(x[0, 1].detach().cpu().numpy()) if x.shape[1] > 1 else prob_forged_default
+                    # Choose prob mapping
+                    prob_forged = prob_forged_x1 if prob_mode == 'x1' else prob_forged_default
+                    # Argmax decision
+                    res_indices = torch.argmax(x, dim=1)
+                    res_argmax = int(level_1_convert(list(res_indices.cpu().numpy()))[0])
+                    return res_argmax, prob_forged
+
+                if not tta:
+                    res_argmax, prob_forged = forward_once(img_input)
+                else:
+                    # Test-time augmentation: original, hflip, vflip, rot90, rot180, rot270
+                    tensors = [img_input,
+                               torch.flip(img_input, dims=[3]),  # hflip
+                               torch.flip(img_input, dims=[2]),  # vflip
+                               torch.rot90(img_input, k=1, dims=[2,3]),
+                               torch.rot90(img_input, k=2, dims=[2,3]),
+                               torch.rot90(img_input, k=3, dims=[2,3])]
+                    probs = []
+                    res_votes = []
+                    for t in tensors:
+                        r, p = forward_once(t)
+                        res_votes.append(r)
+                        probs.append(p)
+                    prob_forged = float(np.mean(probs))
+                    # Majority vote for argmax decisions
+                    res_argmax = 1 if sum(res_votes) > len(res_votes)/2 else 0
+
+                if use_threshold:
+                    res = 1 if prob_forged >= self.confidence_threshold else 0
+                else:
+                    res = res_argmax
                 
                 if verbose:
-                    self._print_detection_result(res, prob[0])
+                    self._print_detection_result(res, prob_forged)
                 
-                return res, prob[0]
+                return res, prob_forged
         except Exception as e:
             if self.verbose:
                 print(f"Detection failed: {e}")

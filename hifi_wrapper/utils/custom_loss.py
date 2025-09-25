@@ -149,11 +149,17 @@ def load_center_radius(args, FENet, SegNet, train_data_loader, center_radius_dir
 		torch.save({'center': center, 'radius': radius}, center_radius_path)
 	return center, radius
 
-def load_center_radius_api(center_radius_dir='center'):
+def load_center_radius_api(center_radius_dir='center', device=None):
 	'''loading the pre-computed center and radius.'''
 	center_radius_path = os.path.join(center_radius_dir, 'radius_center.pth')
 	load_dict_center_radius = torch.load(center_radius_path, map_location=torch.device('cpu'))
 	center = load_dict_center_radius['center']
 	radius = load_dict_center_radius['radius']
-	center, radius = center.to(torch.device('cpu')), radius.to(torch.device('cpu'))
+	
+	# Move to specified device or keep on CPU
+	if device is not None:
+		center, radius = center.to(device), radius.to(device)
+	else:
+		center, radius = center.to(torch.device('cpu')), radius.to(torch.device('cpu'))
+	
 	return center, radius

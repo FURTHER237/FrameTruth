@@ -1,4 +1,4 @@
-xlxxx#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Test script for HiFi wrapper with all images in the images_to_test folder
 """

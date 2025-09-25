@@ -44,7 +44,7 @@ class GaussianSmoothing(nn.Module):
                       torch.exp(-((mgrid - mean) / std) ** 2 / 2)
         # Make sure sum of values in gaussian kernel equals 1.
         kernel = kernel / torch.sum(kernel)
-
+        #print(f"Gaussian kernel: {kernel}")
         # Reshape to depthwise convolutional weight
         kernel = kernel.view(1, 1, *kernel.size())
         kernel = kernel.repeat(channels, *[1] * (kernel.dim() - 1))
