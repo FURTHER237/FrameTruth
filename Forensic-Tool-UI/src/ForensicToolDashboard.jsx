@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
 import {
   Play, Pause, SkipBack, SkipForward, Maximize2, Search, Image as ImageIcon,
   User, CheckCircle2, Mic2, AlertTriangle, Gauge, Hash, Copy,
@@ -171,6 +171,44 @@ export default function ForensicToolDashboard() {
   const [batchIndex, setBatchIndex] = useState(0);
   const [batchLoading, setBatchLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  // progress state + polling ref
+  const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0 });
+  const pollRef = useRef(null);
+
+  // start/stop polling helpers
+  const startPollingProgress = (username) => {
+    if (pollRef.current) return;
+    pollRef.current = setInterval(async () => {
+      try {
+        const res = await fetch("http://localhost:5000/batch_progress", {
+          headers: { "X-Username": username },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setBatchProgress(data || { done: 0, total: 0 });
+        if (data.total && data.done >= data.total) {
+          stopPollingProgress();
+        }
+      } catch (err) {
+        console.error("Progress poll error:", err);
+      }
+    }, 800); // poll every 800ms
+  };
+
+  const stopPollingProgress = () => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  };
+
+  // cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
   
 
 
@@ -422,9 +460,11 @@ export default function ForensicToolDashboard() {
                   if (!files.length) return;
 
                   setBatchLoading(true);
+                  // init progress (frontend-side)
+                  setBatchProgress({ done: 0, total: files.length });
 
                   try {
-                    // 1️⃣ Fetch metadata for original files
+                    // 1) Fetch metadata for original files
                     const metaFormData = new FormData();
                     for (let f of files) metaFormData.append("files", f);
                     const metaRes = await fetch("http://localhost:5000/batch_metadata", {
@@ -433,33 +473,41 @@ export default function ForensicToolDashboard() {
                     });
                     const metaJson = await metaRes.json();
 
-                    // 2️⃣ Send files to batch_analyze
+                    // 2) Start polling progress BEFORE kicking off the long batch job
+                    startPollingProgress(user);
+
+                    // 3) Send files to batch_analyze (long-running)
                     const analyzeFormData = new FormData();
                     for (let f of files) analyzeFormData.append("files", f);
                     const analyzeRes = await fetch("http://localhost:5000/batch_analyze", {
                       method: "POST",
                       body: analyzeFormData,
                       headers: {
-                        "X-Username": user   // ✅ send the actual user
-                      }
+                        "X-Username": user,   // ✅ send the actual user
+                      },
                     });
-                    const analyzeJson = await analyzeRes.json();
 
-                    // 3️⃣ Merge analysis results with metadata
+                    // 4) When batch finishes, parse results and merge with metadata
+                    const analyzeJson = await analyzeRes.json();
                     const mergedResults = analyzeJson.results.map((res, i) => ({
                       ...res,
                       meta: metaJson.results[i] || null,
                     }));
 
-                    // 4️⃣ Update state
                     setBatchResults(mergedResults);
                     setBatchIndex(0);
+
+                    // Make sure progress shows complete (in case backend progress missed final increment)
+                    setBatchProgress({ done: mergedResults.length, total: mergedResults.length });
                   } catch (err) {
                     console.error("Batch analyze failed:", err);
                   } finally {
+                    // stop polling and clear loading
+                    stopPollingProgress();
                     setBatchLoading(false);
                   }
                 }}
+
                 className="block w-full text-sm text-zinc-400
                           file:mr-4 file:py-2 file:px-4
                           file:rounded-lg file:border-0
@@ -471,19 +519,36 @@ export default function ForensicToolDashboard() {
 
             </div>
             {batchLoading && (
-              <div className="mt-3 flex items-center gap-2 text-sm text-sky-400">
-                <span>Analyzing images</span>
-                <div className="flex space-x-0.5">
-                  {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].map((i) => (
-                    <span
-                      key={i}
-                      className="inline-block w-0.5 h-3 bg-sky-400 rounded-none animate-pulse"
-                      style={{ animationDelay: `${i * 0.1}s` }}
-                    />
-                  ))}
+              <div className="flex flex-col w-full items-start gap-2 pt-2">
+                {/* Top row: text + percentage */}
+                <div className="flex justify-between w-full text-xs text-sky-500">
+                  <div>
+                    Images Analysed ({batchProgress.done}/{batchProgress.total || "?"})
+                  </div>
+                  <div>
+                    {batchProgress.total
+                      ? `${Math.round((batchProgress.done / batchProgress.total) * 100)}%`
+                      : "0%"}
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="w-full h-2 rounded-full bg-zinc-800 overflow-hidden">
+                  <div
+                    className="h-full bg-sky-500 transition-all duration-300 ease-in-out"
+                    style={{
+                      width: `${
+                        batchProgress.total
+                          ? (batchProgress.done / batchProgress.total) * 100
+                          : 0
+                      }%`,
+                    }}
+                  />
                 </div>
               </div>
             )}
+
+
 
             {preview && (
               <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-zinc-800 bg-zinc-950 flex items-center justify-center">

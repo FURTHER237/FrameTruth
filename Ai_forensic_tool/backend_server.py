@@ -30,12 +30,15 @@ import sqlite3
 from flask import request
 from functools import wraps
 from flask import request, jsonify
+import threading
 
 app = Flask(__name__)
 CORS(app)
 print("Loading HiFi model...")
 hifi_model = HiFiModel(verbose=False)
 print("✓ HiFi model ready!")
+
+batch_progress = {}
 
 
 # @app.route("/analyze", methods=["POST"])
@@ -390,10 +393,8 @@ def batch_analyze():
       - mask (base64 PNG) or None
       - original image (base64 PNG) for display
     """
-    # ✅ Get the username from the header sent by the frontend
     username = request.headers.get("X-Username")
 
-    # (Optional) handle missing username
     if not username:
         return jsonify({"error": "Username header missing"}), 400
 
@@ -401,17 +402,21 @@ def batch_analyze():
         return jsonify({"error": "No files uploaded"}), 400
 
     files = request.files.getlist("files")
-    print("Batch analyze start. Number of files received:", len(files))
+    total_files = len(files)
+    print(f"Batch analyze start. Number of files received: {total_files}")
+
+    # ✅ Initialize progress tracking
+    batch_progress[username] = {"done": 0, "total": total_files}
+
     results = []
 
     for idx, f in enumerate(files):
-        print(f"\nProcessing file {idx + 1}/{len(files)}: {f.filename}")
+        print(f"\nProcessing file {idx + 1}/{total_files}: {f.filename}")
         with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
             tmp_path = tmp.name
             f.save(tmp_path)
 
         try:
-            # Open original for size and encode it
             img = Image.open(tmp_path).convert("RGB")
             buffer_orig = BytesIO()
             img.save(buffer_orig, format="PNG")
@@ -419,40 +424,33 @@ def batch_analyze():
             encoded_original = base64.b64encode(buffer_orig.read()).decode("utf-8")
 
             try:
-                # Run HiFi model
                 res = hifi_model.analyze_image(tmp_path, save_mask=True)
                 detection = res.get("detection", {})
                 mask_array = res.get("localization", {}).get("mask")
                 print(f"Detection output: {detection}")
-                print(f"Mask exists? {mask_array is not None}")
             except Exception as e:
                 print(f"Error processing {f.filename}: {e}")
                 detection = {"probability": 0.0, "is_forged": False}
                 mask_array = None
 
-            # Normalize & encode mask if it exists
             encoded_mask = None
             if mask_array is not None:
                 mask_min, mask_max = mask_array.min(), mask_array.max()
-                mask_norm = mask_array
                 if mask_max > mask_min:
                     mask_norm = (mask_array - mask_min) / (mask_max - mask_min)
+                else:
+                    mask_norm = mask_array
                 mask_img = Image.fromarray((mask_norm * 255).astype(np.uint8))
                 mask_img = mask_img.resize(img.size, resample=Image.BILINEAR)
                 buffer_mask = BytesIO()
                 mask_img.save(buffer_mask, format="PNG")
                 buffer_mask.seek(0)
                 encoded_mask = base64.b64encode(buffer_mask.read()).decode("utf-8")
-                print(f"Encoded mask length: {len(encoded_mask)}")
 
-            # Confidence & forged flag
             confidence = float(detection.get("probability") or 0.0)
             is_forged = bool(detection.get("is_forged", False))
 
-            
-
-            # Log to database
-            meta_dict = extract_metadata_dict(tmp_path)   # ✅ CALL the helper
+            meta_dict = extract_metadata_dict(tmp_path)
             log_analysis(
                 username=username,
                 filename=f.filename,
@@ -460,7 +458,7 @@ def batch_analyze():
                 is_forged=is_forged,
                 metadata=meta_dict,
                 image_b64=encoded_original,
-                mask_b64=encoded_mask
+                mask_b64=encoded_mask,
             )
 
             results.append({
@@ -468,15 +466,20 @@ def batch_analyze():
                 "confidence": confidence,
                 "is_forged": is_forged,
                 "mask": encoded_mask,
-                "original": encoded_original
+                "original": encoded_original,
             })
             print(f"Finished processing {f.filename}: confidence={confidence}, is_forged={is_forged}")
 
         finally:
             os.remove(tmp_path)
 
+            # ✅ Increment progress
+            batch_progress[username]["done"] += 1
+            print(f"Progress: {batch_progress[username]['done']}/{total_files}")
+
     print("Batch analyze complete. Total results:", len(results))
     return jsonify({"results": results})
+
 
 @app.route("/logs", methods=["GET"])
 def get_logs():
@@ -493,6 +496,14 @@ def get_logs():
     return jsonify([dict(r) for r in rows])
 
 
+@app.route("/batch_progress", methods=["GET"])
+def get_batch_progress():
+    username = request.headers.get("X-Username")
+    if not username:
+        return jsonify({"error": "Username header missing"}), 400
+
+    progress = batch_progress.get(username, {"done": 0, "total": 0})
+    return jsonify(progress)
 
 
 
