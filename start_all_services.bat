@@ -3,13 +3,13 @@ echo Starting FrameTruth Services...
 echo.
 
 REM Start the backend server in the first terminal
-start "Backend Server" cmd /k "cd /d C:\Users\danie\OneDrive\Documents\GitHub\FrameTruth\Ai_forensic_tool && python backend_server.py"
+start "Backend Server" cmd /k "cd /d %~dp0Ai_forensic_tool && python backend_server.py"
 
 REM Start the frontend development server in the second terminal
-start "Frontend Dev Server" cmd /k "cd /d C:\Users\danie\OneDrive\Documents\GitHub\FrameTruth\Forensic-Tool-UI && npm run dev"
+start "Frontend Dev Server" cmd /k "cd /d %~dp0Forensic-Tool-UI && npm run dev"
 
 REM Start the database/API server in the third terminal
-start "Database/API Server" cmd /k "cd /d C:\Users\danie\OneDrive\Documents\GitHub\FrameTruth\Ai_forensic_tool && python -m uvicorn core.main:app --reload --host 127.0.0.1 --port 8000"
+start "Database/API Server" cmd /k "cd /d %~dp0Ai_forensic_tool && python -m uvicorn core.main:app --reload --host 127.0.0.1 --port 8000"
 
 echo All services are starting in separate terminal windows...
 echo.
