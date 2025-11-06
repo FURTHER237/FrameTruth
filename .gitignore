@@ -5,9 +5,25 @@
 Ai_forensic_tool/output/
 Ai_forensic_tool/core/analysis_logs.db
 Ai_forensic_tool/venv/
+# --- Python ---
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.db
+*.db-shm
+*.db-wal
+*.sqlite3
+
+# --- Node / React (Vite) ---
 node_modules/
+dist/
 .vite/
+*.log
+.env
+.env.local
+
+# --- System / Misc ---
+.DS_Store
+Thumbs.db
+
